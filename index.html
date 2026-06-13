@@ -437,17 +437,9 @@ var acctCost = {VEQT:54.94, XEG:25.72, SPYM:78.54, CBIL:50.01, UBIL:50.02, GLD:4
 // CBIL:50.03, VEQT:59.19, XEG:26.11, GLD:391.39, IBIT:34.94, SPYM:85.75, UBIL:50.05
 
 // ═══ STATE ═══
-let positions = [
-  {id:'POS-001',ticker:'GLD', type:'PUT', strike:'360',expiration:'2028-01-17',dte:'584',contrats:'2', prime:'18.97',prixActuel:'24.40',statut:'short',     occ:'GLD280121P00360000'},
-  {id:'POS-002',ticker:'NVDA',type:'CALL',strike:'235',expiration:'2027-03-19',dte:'280',contrats:'2', prime:'30.47',prixActuel:'24.25',statut:'short-call', occ:'NVDA270319C00235000'},
-  {id:'POS-003',ticker:'NVDA',type:'CALL',strike:'160',expiration:'2027-06-18',dte:'371',contrats:'2', prime:'66.38',prixActuel:'65.40',statut:'long-call',  occ:'NVDA270617C00160000'},
-  {id:'POS-004',ticker:'QQQ', type:'PUT', strike:'490',expiration:'2027-06-18',dte:'371',contrats:'3', prime:'23.40',prixActuel:'13.98',statut:'short',      occ:'QQQ270617P00490000'},
-  {id:'POS-005',ticker:'QQQ', type:'PUT', strike:'350',expiration:'2027-09-17',dte:'462',contrats:'1', prime:'8.85', prixActuel:'4.18', statut:'long',       occ:'QQQ270917P00350000'},
-  {id:'POS-006',ticker:'QQQ', type:'PUT', strike:'480',expiration:'2027-09-17',dte:'462',contrats:'2', prime:'26.19',prixActuel:'16.33',statut:'short',      occ:'QQQ270917P00480000'},
-  {id:'POS-007',ticker:'QQQ', type:'PUT', strike:'520',expiration:'2027-12-17',dte:'553',contrats:'4', prime:'25.39',prixActuel:'25.10',statut:'short',      occ:'QQQ271217P00520000'},
-  {id:'POS-008',ticker:'SPY', type:'PUT', strike:'595',expiration:'2028-01-17',dte:'584',contrats:'2', prime:'20.74',prixActuel:'23.99',statut:'short',      occ:'SPY280121P00595000'},
-  {id:'POS-009',ticker:'GLD', type:'PUT', strike:'360',expiration:'2028-01-17',dte:'584',contrats:'1', prime:'23.50',prixActuel:'23.50',statut:'short',      occ:'GLD280121P00360000'},
-];
+// Positions chargées depuis Google Sheets (source de vérité unique)
+// Ne RIEN hardcoder ici — tout vient de Sheets via loadAll()
+let positions = [];
 let mkt = {QQQ:716,SPY:739,GLD:391,VIX:18.68,NVDA:208,
   VEQT:59.19,XEG:26.11,SPYM:85.75,CBIL:50.03,UBIL:50.05,IBIT:34.94,USDCAD:1.3945};
 let rsiData = {QQQ:65,SPY:62,GLD:40,NVDA:55};
