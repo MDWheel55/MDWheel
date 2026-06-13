@@ -238,7 +238,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <div class="pos-toolbar">
     <button class="btn btn-p" onclick="openOptModal()">+ Nouvelle option</button>
     <button class="btn btn-d" id="btn-ref-opts" onclick="refreshOpts()"><span id="ri-opts">↻</span> Actualiser prix options</button>
-    <button class="btn btn-g" onclick="syncSheets()">&#9729; Sync Google Sheets</button>
+    <button class="btn btn-g" onclick="reloadFromSheets()">&#9729; Recharger depuis Sheets</button>
     <div style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted)" id="pos-msg"></div>
   </div>
   <div class="pwrap">
@@ -394,7 +394,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </div></div>
     <div class="modal-actions">
       <button class="btn btn-d" onclick="closeModal()">Annuler</button>
-      <button class="btn btn-p" onclick="savePosition()">Enregistrer</button>
+      <button class="btn btn-p" id="btn-save-pos" onclick="savePosition()">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -496,6 +496,12 @@ async function gsApi(params) {
 async function saveField(key, val) {
   await gsApi({action:'saveCompte', [key]: val});
   setSyncStatus(true, '✓ Sauvegardé');
+}
+
+async function reloadFromSheets() {
+  setSyncStatus(false, 'Rechargement depuis Sheets...');
+  await loadAll();
+  setSyncStatus(true, '✓ Rechargé depuis Sheets');
 }
 
 async function loadAll() {
@@ -1480,6 +1486,21 @@ function getFormData() {
 }
 
 async function savePosition() {
+  // Empêcher les double-clics
+  const btnSave = document.getElementById('btn-save-pos');
+  if (btnSave) {
+    if (btnSave.disabled) return; // déjà en cours
+    btnSave.disabled = true;
+    btnSave.textContent = 'Enregistrement...';
+  }
+  try {
+    await _savePositionInner();
+  } finally {
+    if (btnSave) { btnSave.disabled = false; btnSave.textContent = 'Enregistrer'; }
+  }
+}
+
+async function _savePositionInner() {
   // Vérifier si c'est une position stock
   const isStock = document.getElementById('f-section-stock').style.display !== 'none';
   if (isStock) { await saveStock(); return; }
@@ -1496,11 +1517,11 @@ async function savePosition() {
     if (r) {
       data.id = r.id; data.prixActuel = data.prime;
       positions.push(data);
-      const action = (data.statut==='long'||data.statut==='long-call') ? 'BTO' : 'STO';
+      const tradeAction = (data.statut==='long'||data.statut==='long-call') ? 'BTO' : 'STO';
       const tradeDate = new Date().toISOString().slice(0,10);
       await gsApi({action:'saveTrade', tradeId:r.id, date:tradeDate,
         ticker:data.ticker, type:data.type,
-        strike:data.strike, expiration:data.expiration, action,
+        strike:data.strike, expiration:data.expiration, tradeAction:tradeAction,
         contrats:data.contrats, prix:data.prime, pnl:0});
       // Appliquer l'impact sur cash et quantités
       applyImpact(impact, data);
@@ -1639,7 +1660,7 @@ async function saveStock() {
     const impact = dev==='USD' ? 'achat-action-usd' : 'achat-action-cad';
     applyImpact(impact, {prime:prix, contrats:qty/100, strike:prix, ticker:sym});
     await gsApi({action:'saveTrade',tradeId:r.id,ticker:nom,type:'STOCK',
-      strike:f2(prix),expiration:'—',action:'BTO',contrats:String(qty),prix:f2(prix),pnl:0});
+      strike:f2(prix),expiration:'—',tradeAction:'BTO',contrats:String(qty),prix:f2(prix),pnl:0});
   }
   setSyncStatus(true,'✓ Sauvegardé');
   closeModal(); renderPositions(); renderStocks(); recalcDash(); recalcCompte();
@@ -1654,7 +1675,7 @@ async function fermerPos(id) {
   if (!confirm('Fermer à ' + pc + '% de profit? P&L: $' + fi(pnl) + ' | Coût rachat: $' + fi(coutRachat) + ' USD')) return;
   const closDate = new Date().toISOString().slice(0,10);
   await gsApi({action:'saveTrade', tradeId:p.id+'-close', date:closDate, ticker:p.ticker, type:p.type,
-    strike:p.strike, expiration:p.expiration, action:'BTC',
+    strike:p.strike, expiration:p.expiration, tradeAction:'BTC',
     contrats:p.contrats, prix:p.prixActuel, pnl});
   await gsApi({action:'deletePosition', id});
   positions = positions.filter(x => x.id !== id);
