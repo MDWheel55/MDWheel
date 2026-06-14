@@ -2561,6 +2561,7 @@ function renderTradesActions(rawTrades) {
   body.innerHTML = trades.map(function(t){
     var op = t.operation || '';
     var opCol = op === 'ACHAT' ? 'var(--red)' : 'var(--green)';
+    var opBg  = op === 'ACHAT' ? 'rgba(255,77,109,0.15)' : 'rgba(0,229,160,0.15)';
     var pnl = parseFloat(t.pnl);
     var hasPnl = !isNaN(pnl) && t.operation === 'VENTE';
     var montant = parseFloat(t.montant)||0;
@@ -2569,7 +2570,7 @@ function renderTradesActions(rawTrades) {
       '<td style="font-size:10px;color:var(--muted)">'+(t.date||'')+'</td>'+
       '<td style="font-weight:600;font-family:var(--mono);color:var(--qqq)">'+(t.symbole||'')+'</td>'+
       '<td style="font-size:9px;color:var(--muted)">'+(t.devise||'')+'</td>'+
-      '<td><span style="font-size:10px;padding:1px 6px;border-radius:2px;background:'+opCol.replace(')',',0.12)')+';color:'+opCol+'">'+op+'</span></td>'+
+      '<td><span style="font-size:10px;padding:1px 6px;border-radius:2px;background:'+opBg+';color:'+opCol+'">'+op+'</span></td>'+
       '<td style="text-align:right;font-family:var(--mono)">'+(t.quantite||0)+'</td>'+
       '<td style="text-align:right;font-family:var(--mono)">$'+f2(parseFloat(t.prix)||0)+'</td>'+
       '<td style="text-align:right;font-family:var(--mono);color:'+(montant>=0?'var(--green)':'var(--red)')+'">'+(montant>=0?'+':'')+fi(montant)+'$</td>'+
@@ -2637,7 +2638,8 @@ function renderActionsTable() {
 
     var pnlCol  = pnlDol>=0?'var(--green)':'var(--red)';
     var colDev  = a.dev==='CAD'?'var(--blue)':'var(--amber)';
-    var devBadge= '<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:'+colDev.replace(')',',0.12)')+';color:'+colDev+'">'+a.dev+'</span>';
+    var bgDev   = a.dev==='CAD'?'rgba(77,159,255,0.15)':'rgba(255,184,48,0.15)';
+    var devBadge= '<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:'+bgDev+';color:'+colDev+'">'+a.dev+'</span>';
     var pxActCol= a.pxAct>a.pxAchat?'var(--green)':a.pxAct<a.pxAchat?'var(--red)':'var(--muted)';
 
     var row = '<tr>'+
