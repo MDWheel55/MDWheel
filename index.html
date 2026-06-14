@@ -249,6 +249,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </table>
   </div>
 
+  <div class="sec" style="margin-top:1.5rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span>P&amp;L RÉALISÉ</span>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-d" id="pnl-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPnlView('mois')">Mensuel</button>
+      <button class="btn btn-d" id="pnl-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPnlView('annee')">Annuel</button>
+      <button class="btn btn-d" id="pnl-v-pos"   style="padding:3px 10px;font-size:10px" onclick="setPnlView('position')">Par position</button>
+    </div>
+    <span style="font-size:9px;color:var(--muted)">Gain en capital — 50% imposable</span>
+  </div>
+  <div class="pwrap">
+    <table class="ptbl">
+      <thead id="pnl-head"></thead>
+      <tbody id="pnl-body"></tbody>
+      <tfoot id="pnl-foot"></tfoot>
+    </table>
+  </div>
+  <div style="font-size:9px;color:var(--muted);margin-top:6px;padding:0 4px">
+    ⚠ Estimation pour suivi de trésorerie. La classification fiscale finale (gain en capital vs revenu) doit être validée par votre comptable.
+  </div>
+
   <div class="sec" style="margin-top:1.5rem">HISTORIQUE DES TRANSACTIONS</div>
   <div class="pwrap">
     <table class="ptbl">
@@ -1275,8 +1295,156 @@ function renderPositions() {
   // dash-pos-body géré par renderDashPositions()
 }
 
+// ═══ P&L RÉALISÉ ═══
+let pnlView = 'mois';
+let tradesCache = [];
+
+function setPnlView(v) {
+  pnlView = v;
+  ['mois','annee','position'].forEach(k => {
+    const btn = document.getElementById('pnl-v-' + (k==='position'?'pos':k));
+    if (btn) btn.style.opacity = (k===v) ? '1' : '0.5';
+  });
+  renderPnlRealized();
+}
+
+function normalizeTrades(rawTrades) {
+  let trades = Array.isArray(rawTrades) ? rawTrades
+             : (rawTrades && Array.isArray(rawTrades.trades)) ? rawTrades.trades : [];
+  const fmtDate = v => { if (!v) return ''; const s = String(v); return s.includes('T') ? s.slice(0,10) : s; };
+  return trades.map(t => ({
+    date:       fmtDate(t.date || t.Date || ''),
+    tradeId:    t.tradeId || t.TradeId || t.id || '',
+    ticker:     t.ticker || t.Ticker || '',
+    type:       t.type || t.Type || '',
+    strike:     t.strike || t.Strike || '',
+    expiration: fmtDate(t.expiration || t.Expiration || ''),
+    action:     t.tradeAction || t.TradeAction || t.action || t.Action || '',
+    contrats:   t.contrats || t.Contrats || '',
+    prix:       t.prix || t.Prix || t.price || t.Price || 0,
+    pnl:        parseFloat(t.pnl || t.Pnl || t.PnL || 0) || 0,
+  }));
+}
+
+function isStockTrade(t) {
+  // Une action (stock) n'a pas d'expiration d'option
+  return !t.expiration || t.expiration === '—' || t.type === 'STOCK';
+}
+
+function renderPnlRealized() {
+  const head = document.getElementById('pnl-head');
+  const body = document.getElementById('pnl-body');
+  const foot = document.getElementById('pnl-foot');
+  if (!head || !body) return;
+
+  const trades = tradesCache;
+  // Ouvertures = STO/BTO (primes encaissées) ; Fermetures = BTC/STC/EXP/ASSIGN (P&L réalisé)
+  const ouvertures = trades.filter(t => t.action === 'STO' || t.action === 'BTO');
+  const fermetures = trades.filter(t => ['BTC','STC','EXP','ASSIGN'].includes(t.action));
+
+  if (pnlView === 'position') {
+    // Vue par position : chaque fermeture avec son P&L réalisé
+    head.innerHTML = '<tr><th>DATE</th><th>TICKER</th><th>TYPE</th><th>STRIKE</th>'
+      + '<th>FERMETURE</th><th>CONTRATS</th><th>CATÉGORIE</th><th>P&L RÉALISÉ</th><th>IMPOSABLE 50%</th></tr>';
+    if (fermetures.length === 0) {
+      body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune position fermée</td></tr>';
+      foot.innerHTML = '';
+      return;
+    }
+    const sorted = [...fermetures].sort((a,b) => (b.date > a.date ? 1 : -1));
+    let totPnl = 0;
+    body.innerHTML = sorted.map(t => {
+      const cat = isStockTrade(t) ? 'Action' : 'Option';
+      const fermLabel = {BTC:'Rachat',STC:'Vente',EXP:'Expiration',ASSIGN:'Assignation'}[t.action] || t.action;
+      const pnl = t.pnl;
+      totPnl += pnl;
+      const imp = Math.round(pnl * 0.5);
+      const tkCls = t.ticker==='QQQ'?'tq':t.ticker==='SPY'?'ts':t.ticker==='GLD'?'tg':'tn';
+      return '<tr>'
+        + '<td style="font-size:10px">'+t.date+'</td>'
+        + '<td><span class="tk '+tkCls+'">'+t.ticker+'</span></td>'
+        + '<td style="font-size:9px;color:var(--muted)">'+t.type+'</td>'
+        + '<td>$'+t.strike+'</td>'
+        + '<td style="font-size:10px">'+fermLabel+'</td>'
+        + '<td>'+t.contrats+'</td>'
+        + '<td style="font-size:10px;color:var(--muted)">'+cat+'</td>'
+        + '<td style="color:'+(pnl>=0?'var(--green)':'var(--red)')+'">'+(pnl>=0?'+':'')+fi(pnl)+'$</td>'
+        + '<td style="color:var(--muted)">'+(imp>=0?'+':'')+fi(imp)+'$</td>'
+        + '</tr>';
+    }).join('');
+    foot.innerHTML = '<tr style="border-top:2px solid var(--border)">'
+      + '<td colspan="7" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL P&L RÉALISÉ</td>'
+      + '<td style="color:'+(totPnl>=0?'var(--green)':'var(--red)')+';font-weight:600">'+(totPnl>=0?'+':'')+fi(totPnl)+'$</td>'
+      + '<td style="color:var(--muted);font-weight:600">'+(Math.round(totPnl*0.5)>=0?'+':'')+fi(Math.round(totPnl*0.5))+'$</td>'
+      + '</tr>';
+    return;
+  }
+
+  // Vues par période (mois ou année)
+  const periodKey = d => pnlView === 'annee' ? (d||'').slice(0,4) : (d||'').slice(0,7);
+  const periods = {};
+  // Primes encaissées (ouvertures) — à la date de transaction
+  ouvertures.forEach(t => {
+    const k = periodKey(t.date); if (!k) return;
+    periods[k] = periods[k] || {primesOpt:0, primesAct:0, pnlOpt:0, pnlAct:0};
+    const montant = Math.round(parseFloat(t.prix) * 100 * Math.abs(parseInt(t.contrats)||1));
+    if (isStockTrade(t)) periods[k].primesAct += montant;
+    else periods[k].primesOpt += montant;
+  });
+  // P&L réalisé (fermetures) — à la date de fermeture
+  fermetures.forEach(t => {
+    const k = periodKey(t.date); if (!k) return;
+    periods[k] = periods[k] || {primesOpt:0, primesAct:0, pnlOpt:0, pnlAct:0};
+    if (isStockTrade(t)) periods[k].pnlAct += t.pnl;
+    else periods[k].pnlOpt += t.pnl;
+  });
+
+  const keys = Object.keys(periods).sort().reverse();
+  head.innerHTML = '<tr><th>PÉRIODE</th><th>PRIMES OPTIONS</th><th>PRIMES ACTIONS</th>'
+    + '<th>P&L OPTIONS</th><th>P&L ACTIONS</th><th>P&L TOTAL</th><th>IMPOSABLE 50%</th></tr>';
+
+  if (keys.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune transaction enregistrée</td></tr>';
+    foot.innerHTML = '';
+    return;
+  }
+
+  let tPrimesOpt=0, tPrimesAct=0, tPnlOpt=0, tPnlAct=0;
+  body.innerHTML = keys.map(k => {
+    const p = periods[k];
+    tPrimesOpt += p.primesOpt; tPrimesAct += p.primesAct;
+    tPnlOpt += p.pnlOpt; tPnlAct += p.pnlAct;
+    const pnlTot = p.pnlOpt + p.pnlAct;
+    const imp = Math.round(pnlTot * 0.5);
+    const col = v => v>=0?'var(--green)':'var(--red)';
+    return '<tr>'
+      + '<td style="font-weight:600">'+k+'</td>'
+      + '<td style="color:var(--green)">+'+fi(p.primesOpt)+'$</td>'
+      + '<td style="color:'+(p.primesAct>=0?'var(--green)':'var(--muted)')+'">'+(p.primesAct?'+'+fi(p.primesAct)+'$':'—')+'</td>'
+      + '<td style="color:'+col(p.pnlOpt)+'">'+(p.pnlOpt>=0?'+':'')+fi(p.pnlOpt)+'$</td>'
+      + '<td style="color:'+(p.pnlAct?col(p.pnlAct):'var(--muted)')+'">'+(p.pnlAct?(p.pnlAct>=0?'+':'')+fi(p.pnlAct)+'$':'—')+'</td>'
+      + '<td style="color:'+col(pnlTot)+';font-weight:600">'+(pnlTot>=0?'+':'')+fi(pnlTot)+'$</td>'
+      + '<td style="color:var(--muted)">'+(imp>=0?'+':'')+fi(imp)+'$</td>'
+      + '</tr>';
+  }).join('');
+
+  const tPnlTot = tPnlOpt + tPnlAct;
+  foot.innerHTML = '<tr style="border-top:2px solid var(--border)">'
+    + '<td style="padding:8px;font-weight:600">TOTAL</td>'
+    + '<td style="color:var(--green);font-weight:600">+'+fi(tPrimesOpt)+'$</td>'
+    + '<td style="color:var(--muted);font-weight:600">'+(tPrimesAct?'+'+fi(tPrimesAct)+'$':'—')+'</td>'
+    + '<td style="color:'+(tPnlOpt>=0?'var(--green)':'var(--red)')+';font-weight:600">'+(tPnlOpt>=0?'+':'')+fi(tPnlOpt)+'$</td>'
+    + '<td style="color:'+(tPnlAct>=0?'var(--green)':'var(--red)')+';font-weight:600">'+(tPnlAct?(tPnlAct>=0?'+':'')+fi(tPnlAct)+'$':'—')+'</td>'
+    + '<td style="color:'+(tPnlTot>=0?'var(--green)':'var(--red)')+';font-weight:600">'+(tPnlTot>=0?'+':'')+fi(tPnlTot)+'$</td>'
+    + '<td style="color:var(--muted);font-weight:600">'+(Math.round(tPnlTot*0.5)>=0?'+':'')+fi(Math.round(tPnlTot*0.5))+'$</td>'
+    + '</tr>';
+}
+
 function renderTrades(rawTrades) {
   const body = document.getElementById('trades-body');
+  // Alimenter le cache pour le P&L réalisé et le rafraîchir
+  tradesCache = normalizeTrades(rawTrades);
+  renderPnlRealized();
   if (!body) return;
   // Normaliser: accepter array direct ou objet {trades:[...]}
   let trades = Array.isArray(rawTrades) ? rawTrades
@@ -2451,6 +2619,7 @@ function recalcCompte() {
 renderStrip();
 recalcDash();
 updateDispValues();
+setPnlView('mois');
 // Démarrage automatique : charge Sheets, ferme les expirations, actualise tout
 loadAll().then(async function(){
   recalcCompte();
