@@ -316,6 +316,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
       <tfoot id="stk-foot"></tfoot>
     </table>
   </div>
+
+  <div class="sec" style="margin-top:1.5rem">HISTORIQUE DES TRANSACTIONS — ACTIONS</div>
+  <div class="pwrap">
+    <table class="ptbl">
+      <thead><tr>
+        <th>DATE</th><th>SYMBOLE</th><th>DEV</th><th>OPÉRATION</th>
+        <th style="text-align:right">QTÉ</th><th style="text-align:right">PRIX</th>
+        <th style="text-align:right">MONTANT</th><th style="text-align:right">FRAIS</th>
+        <th style="text-align:right">P&L RÉALISÉ</th>
+      </tr></thead>
+      <tbody id="trades-act-body"><tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr></tbody>
+    </table>
+  </div>
 </div>
 
 <div class="panel" id="tab-compte">
@@ -525,7 +538,10 @@ function showTab(name, el) {
   el.classList.add('active');
   if(name === 'compte')  { recalcCompte(); }
   if(name === 'options') { renderPositions(); }
-  if(name === 'actions') { renderStocks(); renderActionsTable(); }
+  if(name === 'actions') {
+    renderStocks(); renderActionsTable();
+    gsApi({action:'getTradesActions'}).then(function(ta){ if(ta) renderTradesActions(ta); });
+  }
 }
 
 // ═══ GOOGLE SHEETS ═══
@@ -1950,20 +1966,14 @@ async function saveStock() {
   if (ta && typeof renderTradesActions === 'function') renderTradesActions(ta);
 }
 
-// Ajuste le cash USD ou CAD du montant donné, persiste dans Compte
+// Ajuste le cash USD ou CAD du montant donné, via setCash (cohérence totale)
 function adjustCash(devise, montant) {
+  const curU = parseFloat(gv('c-cash-usd','24084'))||0;
+  const curC = parseFloat(gv('c-cash-cad','73661'))||0;
   if (devise === 'USD') {
-    const cur = parseFloat(gv('m-cash','24084'))||0;
-    const nv = Math.round((cur + montant)*100)/100;
-    const el = document.getElementById('m-cash'); if(el) el.value = nv;
-    const elc = document.getElementById('c-cash-usd'); if(elc) elc.value = nv;
-    saveField('CashUSD', nv);
+    setCash(curU + montant, curC);
   } else {
-    const cur = parseFloat(gv('m-cashcad','73661'))||0;
-    const nv = Math.round((cur + montant)*100)/100;
-    const el = document.getElementById('m-cashcad'); if(el) el.value = nv;
-    const elc = document.getElementById('c-cash-cad'); if(elc) elc.value = nv;
-    saveField('CashCAD', nv);
+    setCash(curU, curC + montant);
   }
 }
 
@@ -2538,6 +2548,37 @@ function updateDispValues() {
 }
 
 // ═══ RENDER ACTIONS TABLE ═══
+function renderTradesActions(rawTrades) {
+  const body = document.getElementById('trades-act-body');
+  if (!body) return;
+  let trades = Array.isArray(rawTrades) ? rawTrades
+             : (rawTrades && Array.isArray(rawTrades.data)) ? rawTrades.data : [];
+  if (trades.length === 0) {
+    body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr>';
+    return;
+  }
+  trades = trades.slice().reverse();
+  body.innerHTML = trades.map(function(t){
+    var op = t.operation || '';
+    var opCol = op === 'ACHAT' ? 'var(--red)' : 'var(--green)';
+    var pnl = parseFloat(t.pnl);
+    var hasPnl = !isNaN(pnl) && t.operation === 'VENTE';
+    var montant = parseFloat(t.montant)||0;
+    var frais = parseFloat(t.frais)||0;
+    return '<tr>'+
+      '<td style="font-size:10px;color:var(--muted)">'+(t.date||'')+'</td>'+
+      '<td style="font-weight:600;font-family:var(--mono);color:var(--qqq)">'+(t.symbole||'')+'</td>'+
+      '<td style="font-size:9px;color:var(--muted)">'+(t.devise||'')+'</td>'+
+      '<td><span style="font-size:10px;padding:1px 6px;border-radius:2px;background:'+opCol.replace(')',',0.12)')+';color:'+opCol+'">'+op+'</span></td>'+
+      '<td style="text-align:right;font-family:var(--mono)">'+(t.quantite||0)+'</td>'+
+      '<td style="text-align:right;font-family:var(--mono)">$'+f2(parseFloat(t.prix)||0)+'</td>'+
+      '<td style="text-align:right;font-family:var(--mono);color:'+(montant>=0?'var(--green)':'var(--red)')+'">'+(montant>=0?'+':'')+fi(montant)+'$</td>'+
+      '<td style="text-align:right;font-family:var(--mono);color:var(--muted)">'+(frais>0?'$'+f2(frais):'—')+'</td>'+
+      '<td style="text-align:right;font-family:var(--mono);color:'+(hasPnl?(pnl>=0?'var(--green)':'var(--red)'):'var(--muted)')+'">'+(hasPnl?((pnl>=0?'+':'')+fi(pnl)+'$'):'—')+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
 function updateActionQty(el) {
   var inpId = el.getAttribute('data-inp');
   var key   = el.getAttribute('data-key');
@@ -2611,7 +2652,6 @@ function renderActionsTable() {
       '<td style="text-align:right;font-family:var(--mono);color:'+pnlCol+'">'+(pnlPct>=0?'+':'')+pnlPct.toFixed(2)+'%</td>'+
       '<td style="text-align:right;font-size:10px;color:var(--muted)">'+Math.round(a.taux)+'%</td>'+
       '<td style="text-align:right;font-family:var(--mono);color:var(--green)">$'+fi(empr)+' '+a.dev+'</td>'+
-      '<td><input type="number" value="'+Math.round(a.qty)+'" data-key="Qte'+a.key+'" style="width:65px;background:var(--s2);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:11px;padding:2px 5px;text-align:right" onchange="updateActionQty(this)"></td>'+
     '</tr>';
     if(a.usd) rowsUSD.push(row);
     else       rowsCAD.push(row);
@@ -2632,12 +2672,11 @@ function renderActionsTable() {
       '<th style="text-align:right">VALEUR MKT</th>'+
       '<th style="text-align:right">P&L $</th><th style="text-align:right">P&L %</th>'+
       '<th style="text-align:right">EMPRUNT %</th><th style="text-align:right">VAL. EMPRUNT</th>'+
-      '<th>QTÉ ✎</th>'+
     '</tr>';
   }
 
   // Séparateur section
-  var secRow = function(lbl,col){ return '<tr><td colspan="12" style="padding:6px 8px;font-family:var(--mono);font-size:8px;color:'+col+';letter-spacing:0.1em;background:var(--s2);border-top:2px solid var(--border)">'+lbl+'</td></tr>'; };
+  var secRow = function(lbl,col){ return '<tr><td colspan="11" style="padding:6px 8px;font-family:var(--mono);font-size:8px;color:'+col+';letter-spacing:0.1em;background:var(--s2);border-top:2px solid var(--border)">'+lbl+'</td></tr>'; };
 
   tbody.innerHTML = secRow('ACTIONS CAD','var(--blue)')+rowsCAD.join('')+secRow('ACTIONS USD','var(--amber)')+rowsUSD.join('');
 
