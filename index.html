@@ -275,7 +275,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
       <thead><tr>
         <th>DATE</th><th>ID</th><th>TICKER</th><th>TYPE</th>
         <th>STRIKE</th><th>EXPIRATION</th><th>ACTION</th>
-        <th>CONTRATS</th><th>PRIX</th><th>P&L</th>
+        <th>CONTRATS</th><th>PRIX</th><th>FRAIS</th><th>P&L</th>
       </tr></thead>
       <tbody id="trades-body"></tbody>
     </table>
@@ -397,6 +397,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
       <div class="ff"><label>Expiration</label><input type="date" id="f-exp" onchange="calcDTE()"></div>
       <div class="ff"><label>Contrats</label><input type="number" id="f-cont" value="1" min="1"></div>
       <div class="ff"><label>Prime reçue ($)</label><input type="number" id="f-prime" value="20" step="0.01"></div>
+      <div class="ff"><label>Frais ($ USD)</label><input type="number" id="f-frais" value="5" step="0.01"></div>
       <div class="ff"><label>DTE (jours)</label><input type="number" id="f-dte" value="540" readonly style="opacity:0.6;cursor:not-allowed"></div>
       <div class="ff"><label>Statut</label><select id="f-statut" onchange="autoImpact()"><option value="short">Short (vendu)</option><option value="long">Long (acheté)</option><option value="short-call">Short Call</option><option value="long-call">Long Call</option></select></div>
       <div class="ff ff-full"><label>Symbole OCC (ex: QQQ271217P00520000)</label><input type="text" id="f-occ" placeholder="QQQ271217P00520000"></div>
@@ -404,12 +405,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </div>
     <div id="f-section-stock" style="display:none">
     <div class="fgrid">
-      <div class="ff"><label>Symbole Finnhub</label><input type="text" id="f-stk-sym" placeholder="ex: VEQT.TO, GLD, SPYM"></div>
-      <div class="ff"><label>Nom affiché</label><input type="text" id="f-stk-nom" placeholder="ex: VEQT-C"></div>
+      <div class="ff"><label>Symbole</label><select id="f-stk-sym" onchange="autoStockDevise()">
+        <option value="CBIL-C">CBIL-C — GLB X 0-3M T-BILL (CAD)</option>
+        <option value="VEQT-C">VEQT-C — Vanguard All-EQ (CAD)</option>
+        <option value="XEG-C">XEG-C — iShares S&P/TSX Énergie (CAD)</option>
+        <option value="GLD-U">GLD-U — SPDR Gold Trust (USD)</option>
+        <option value="IBIT-U">IBIT-U — iShares Bitcoin Trust (USD)</option>
+        <option value="SPYM-U">SPYM-U — SPDR S&P 500 (USD)</option>
+        <option value="UBIL.U">UBIL.U — GLB X 0-3M US T-Bill (USD)</option>
+      </select></div>
       <div class="ff"><label>Devise</label><select id="f-stk-dev"><option value="CAD">CAD</option><option value="USD">USD</option></select></div>
       <div class="ff"><label>Nombre d'actions</label><input type="number" id="f-stk-qty" value="100" min="1"></div>
       <div class="ff"><label>Prix d'achat moyen ($)</label><input type="number" id="f-stk-prix" value="50" step="0.01"></div>
-      <div class="ff"><label>Prix actuel ($)</label><input type="number" id="f-stk-actuel" value="50" step="0.01"></div>
     </div>
     </div></div>
     <div class="modal-actions">
@@ -1253,7 +1260,7 @@ function posRow(p, showOcc) {
   );
   // Valeur d'emprunt (après DTE)
   const ve = calcValEmprunt(p);
-  const veStr = (showOcc && ve > 0) ? '<span style="color:var(--red);font-family:var(--mono);font-size:10px">−'+fi(ve)+'$</span>'
+  const veStr = (showOcc && ve > 0) ? '<span style="color:var(--muted);font-family:var(--mono);font-size:10px">'+fi(ve)+'$</span>'
                                      : '<span style="color:var(--muted);font-size:10px">—</span>';
   cols.push(veStr);
   if (showOcc) cols.push('<span style="font-size:9px;color:var(--muted)">'+p.occ+'</span>');
@@ -1322,6 +1329,7 @@ function normalizeTrades(rawTrades) {
     action:     t.tradeAction || t.TradeAction || t.action || t.Action || '',
     contrats:   t.contrats || t.Contrats || '',
     prix:       t.prix || t.Prix || t.price || t.Price || 0,
+    frais:      parseFloat(t.frais || t.Frais || 0) || 0,
     pnl:        parseFloat(t.pnl || t.Pnl || t.PnL || 0) || 0,
   }));
 }
@@ -1383,37 +1391,42 @@ function renderPnlRealized() {
   // Vues par période (mois ou année)
   const periodKey = d => pnlView === 'annee' ? (d||'').slice(0,4) : (d||'').slice(0,7);
   const periods = {};
+  const blank = () => ({primesOpt:0, primesAct:0, pnlOpt:0, pnlAct:0, frais:0});
   // Primes encaissées (ouvertures) — à la date de transaction
+  // Les frais d'ouverture sont comptabilisés à la date d'ouverture
   ouvertures.forEach(t => {
     const k = periodKey(t.date); if (!k) return;
-    periods[k] = periods[k] || {primesOpt:0, primesAct:0, pnlOpt:0, pnlAct:0};
+    periods[k] = periods[k] || blank();
     const montant = Math.round(parseFloat(t.prix) * 100 * Math.abs(parseInt(t.contrats)||1));
     if (isStockTrade(t)) periods[k].primesAct += montant;
     else periods[k].primesOpt += montant;
+    periods[k].frais += (parseFloat(t.frais)||0);
   });
   // P&L réalisé (fermetures) — à la date de fermeture
+  // Le P&L stocké inclut déjà la déduction des frais de fermeture
   fermetures.forEach(t => {
     const k = periodKey(t.date); if (!k) return;
-    periods[k] = periods[k] || {primesOpt:0, primesAct:0, pnlOpt:0, pnlAct:0};
+    periods[k] = periods[k] || blank();
     if (isStockTrade(t)) periods[k].pnlAct += t.pnl;
     else periods[k].pnlOpt += t.pnl;
+    periods[k].frais += (parseFloat(t.frais)||0);
   });
 
   const keys = Object.keys(periods).sort().reverse();
   head.innerHTML = '<tr><th>PÉRIODE</th><th>PRIMES OPTIONS</th><th>PRIMES ACTIONS</th>'
-    + '<th>P&L OPTIONS</th><th>P&L ACTIONS</th><th>P&L TOTAL</th><th>IMPOSABLE 50%</th></tr>';
+    + '<th>P&L OPTIONS</th><th>P&L ACTIONS</th><th>FRAIS</th><th>P&L TOTAL</th><th>IMPOSABLE 50%</th></tr>';
 
   if (keys.length === 0) {
-    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune transaction enregistrée</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune transaction enregistrée</td></tr>';
     foot.innerHTML = '';
     return;
   }
 
-  let tPrimesOpt=0, tPrimesAct=0, tPnlOpt=0, tPnlAct=0;
+  let tPrimesOpt=0, tPrimesAct=0, tPnlOpt=0, tPnlAct=0, tFrais=0;
   body.innerHTML = keys.map(k => {
     const p = periods[k];
     tPrimesOpt += p.primesOpt; tPrimesAct += p.primesAct;
-    tPnlOpt += p.pnlOpt; tPnlAct += p.pnlAct;
+    tPnlOpt += p.pnlOpt; tPnlAct += p.pnlAct; tFrais += p.frais;
     const pnlTot = p.pnlOpt + p.pnlAct;
     const imp = Math.round(pnlTot * 0.5);
     const col = v => v>=0?'var(--green)':'var(--red)';
@@ -1423,6 +1436,7 @@ function renderPnlRealized() {
       + '<td style="color:'+(p.primesAct>=0?'var(--green)':'var(--muted)')+'">'+(p.primesAct?'+'+fi(p.primesAct)+'$':'—')+'</td>'
       + '<td style="color:'+col(p.pnlOpt)+'">'+(p.pnlOpt>=0?'+':'')+fi(p.pnlOpt)+'$</td>'
       + '<td style="color:'+(p.pnlAct?col(p.pnlAct):'var(--muted)')+'">'+(p.pnlAct?(p.pnlAct>=0?'+':'')+fi(p.pnlAct)+'$':'—')+'</td>'
+      + '<td style="color:var(--muted)">'+(p.frais?'$'+fi(p.frais):'—')+'</td>'
       + '<td style="color:'+col(pnlTot)+';font-weight:600">'+(pnlTot>=0?'+':'')+fi(pnlTot)+'$</td>'
       + '<td style="color:var(--muted)">'+(imp>=0?'+':'')+fi(imp)+'$</td>'
       + '</tr>';
@@ -1435,6 +1449,7 @@ function renderPnlRealized() {
     + '<td style="color:var(--muted);font-weight:600">'+(tPrimesAct?'+'+fi(tPrimesAct)+'$':'—')+'</td>'
     + '<td style="color:'+(tPnlOpt>=0?'var(--green)':'var(--red)')+';font-weight:600">'+(tPnlOpt>=0?'+':'')+fi(tPnlOpt)+'$</td>'
     + '<td style="color:'+(tPnlAct>=0?'var(--green)':'var(--red)')+';font-weight:600">'+(tPnlAct?(tPnlAct>=0?'+':'')+fi(tPnlAct)+'$':'—')+'</td>'
+    + '<td style="color:var(--muted);font-weight:600">'+(tFrais?'$'+fi(tFrais):'—')+'</td>'
     + '<td style="color:'+(tPnlTot>=0?'var(--green)':'var(--red)')+';font-weight:600">'+(tPnlTot>=0?'+':'')+fi(tPnlTot)+'$</td>'
     + '<td style="color:var(--muted);font-weight:600">'+(Math.round(tPnlTot*0.5)>=0?'+':'')+fi(Math.round(tPnlTot*0.5))+'$</td>'
     + '</tr>';
@@ -1489,11 +1504,12 @@ function renderTrades(rawTrades) {
           '<td><span class="tag '+actCls+'">'+t.action+'</span></td>' +
           '<td>'+t.contrats+'</td>' +
           '<td>$'+f2(parseFloat(t.prix))+'</td>' +
+          '<td style="color:var(--muted)">'+(parseFloat(t.frais)>0?'$'+f2(parseFloat(t.frais)):'—')+'</td>' +
           '<td style="color:'+(pnl>=0?'var(--green)':'var(--red)')+'">'+
             (pnl>=0?'+':'')+fi(pnl)+'$</td>' +
         '</tr>';
       }).join('')
-    : '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:1rem">Aucun trade enregistré</td></tr>';
+    : '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:1rem">Aucun trade enregistré</td></tr>';
 }
 
 // ═══ MODAL ═══
@@ -1502,12 +1518,10 @@ function openStkModal() {
   editingId = null;
   document.getElementById('modal-ttl').textContent = 'Nouvelle position action';
   setMode('stock');
-  document.getElementById('f-stk-sym').value='';
-  document.getElementById('f-stk-nom').value='';
-  document.getElementById('f-stk-dev').value='USD';
+  document.getElementById('f-stk-sym').value='CBIL-C';
+  document.getElementById('f-stk-dev').value='CAD';
   document.getElementById('f-stk-qty').value='100';
   document.getElementById('f-stk-prix').value='50';
-  document.getElementById('f-stk-actuel').value='50';
   document.getElementById('modal').classList.add('show');
 }
 
@@ -1582,6 +1596,7 @@ function openModal(id) {
     document.getElementById('f-exp').value='';
     document.getElementById('f-cont').value='1';
     document.getElementById('f-prime').value='20';
+    document.getElementById('f-frais').value='5';
     document.getElementById('f-dte').value='';
     document.getElementById('f-statut').value='short';
     document.getElementById('f-occ').value='';
@@ -1649,6 +1664,7 @@ function getFormData() {
     expiration: expVal,
     contrats:   document.getElementById('f-cont').value,
     prime:      document.getElementById('f-prime').value,
+    frais:      document.getElementById('f-frais').value || '5',
     dte:        String(dte),
     statut:     document.getElementById('f-statut').value,
     occ:        (document.getElementById('f-occ').value||'').trim().replace(/-U$/,''),
@@ -1689,10 +1705,11 @@ async function _savePositionInner() {
       positions.push(data);
       const tradeAction = (data.statut==='long'||data.statut==='long-call') ? 'BTO' : 'STO';
       const tradeDate = new Date().toISOString().slice(0,10);
+      const frais = parseFloat(data.frais)||5;
       await gsApi({action:'saveTrade', tradeId:r.id, date:tradeDate,
         ticker:data.ticker, type:data.type,
         strike:data.strike, expiration:data.expiration, tradeAction:tradeAction,
-        contrats:data.contrats, prix:data.prime, pnl:0});
+        contrats:data.contrats, prix:data.prime, frais:frais, pnl:0});
       // Appliquer l'impact sur cash et quantités
       applyImpact(impact, data);
       // Rafraîchir l'historique
@@ -1808,13 +1825,21 @@ async function deletePos(id) {
   renderPositions(); recalcDash();
 }
 
+function autoStockDevise() {
+  // Ajuste automatiquement la devise selon le symbole (-C = CAD, -U/.U = USD)
+  const sym = document.getElementById('f-stk-sym').value || '';
+  const dev = (sym.endsWith('-U') || sym.endsWith('.U')) ? 'USD' : 'CAD';
+  const el = document.getElementById('f-stk-dev');
+  if (el) el.value = dev;
+}
+
 async function saveStock() {
   const sym    = (document.getElementById('f-stk-sym').value||'').trim().toUpperCase();
-  const nom    = document.getElementById('f-stk-nom').value||sym;
+  const nom    = sym;
   const dev    = document.getElementById('f-stk-dev').value||'USD';
   const qty    = parseFloat(document.getElementById('f-stk-qty').value)||0;
   const prix   = parseFloat(document.getElementById('f-stk-prix').value)||0;
-  const actuel = parseFloat(document.getElementById('f-stk-actuel').value)||prix;
+  const actuel = prix; // Finnhub mettra à jour le prix réel
   if(!sym||qty<=0){ alert('Symbole et quantité requis'); return; }
   const data = {
     ticker:nom, type:'STOCK', strike:f2(prix), expiration:'—',
@@ -1881,14 +1906,21 @@ async function fermerPos(id) {
   const contr = Math.abs(parseInt(p.contrats)||1);
   const prime = parseFloat(p.prime);
   const closDate = new Date().toISOString().slice(0,10);
+  // Frais de fermeture (par défaut 5$, sauf expiration = 0$ car aucune transaction)
+  let frais = 0;
+  if (typeFerm === '1' || typeFerm === '3') {
+    const fraisStr = prompt('Frais de cette transaction ($ USD)?', '5');
+    if (fraisStr === null) return;
+    frais = parseFloat(fraisStr) || 0;
+  }
 
   if (typeFerm === '2') {
-    // EXPIRATION — gain = prime complète
+    // EXPIRATION — gain = prime complète, aucun frais (pas de transaction)
     const pnl = Math.round(prime * 100 * contr);
-    if (!confirm('Marquer comme expirée? Gain réalisé: $' + fi(pnl) + ' (prime complète)')) return;
+    if (!confirm('Marquer comme expirée? Gain réalisé: $' + fi(pnl) + ' (prime complète, aucun frais)')) return;
     await gsApi({action:'saveTrade', tradeId:p.id+'-exp', date:p.expiration||closDate,
       ticker:p.ticker, type:p.type, strike:p.strike, expiration:p.expiration,
-      tradeAction:'EXP', contrats:p.contrats, prix:'0', pnl});
+      tradeAction:'EXP', contrats:p.contrats, prix:'0', frais:0, pnl});
     await gsApi({action:'deletePosition', id});
     positions = positions.filter(x => x.id !== id);
     const trades = await gsApi({action:'getTrades'});
@@ -1901,10 +1933,10 @@ async function fermerPos(id) {
   if (typeFerm === '3') {
     // ASSIGNATION — pas de gain en capital sur l'option; la prime ajuste le coût des actions
     if (!confirm('Marquer comme assignée?\n\nLa prime de $' + fi(Math.round(prime*100*contr)) +
-                 ' ajustera le coût des actions (pas de gain en capital sur l\'option).')) return;
+                 ' ajustera le coût des actions (pas de gain en capital sur l\'option). Frais: $' + fi(frais))) return;
     await gsApi({action:'saveTrade', tradeId:p.id+'-assign', date:closDate,
       ticker:p.ticker, type:p.type, strike:p.strike, expiration:p.expiration,
-      tradeAction:'ASSIGN', contrats:p.contrats, prix:p.strike, pnl:0});
+      tradeAction:'ASSIGN', contrats:p.contrats, prix:p.strike, frais:frais, pnl:0});
     await gsApi({action:'deletePosition', id});
     positions = positions.filter(x => x.id !== id);
     const trades = await gsApi({action:'getTrades'});
@@ -1916,12 +1948,14 @@ async function fermerPos(id) {
 
   // typeFerm === '1' : RACHAT (BTC) — comportement par défaut
   const pc  = ppct(prime, parseFloat(p.prixActuel));
-  const pnl = Math.round((prime - parseFloat(p.prixActuel)) * 100 * contr);
+  // P&L net = (prime − coût rachat) × 100 × contrats − frais
+  const pnlBrut = (prime - parseFloat(p.prixActuel)) * 100 * contr;
+  const pnl = Math.round(pnlBrut - frais);
   const coutRachat = Math.round(parseFloat(p.prixActuel) * 100 * contr);
-  if (!confirm('Racheter à ' + pc + '% de profit? P&L: $' + fi(pnl) + ' | Coût rachat: $' + fi(coutRachat) + ' USD')) return;
+  if (!confirm('Racheter à ' + pc + '% de profit?\nP&L net (frais $' + fi(frais) + ' déduits): $' + fi(pnl) + '\nCoût rachat: $' + fi(coutRachat) + ' USD')) return;
   await gsApi({action:'saveTrade', tradeId:p.id+'-close', date:closDate, ticker:p.ticker, type:p.type,
     strike:p.strike, expiration:p.expiration, tradeAction:'BTC',
-    contrats:p.contrats, prix:p.prixActuel, pnl});
+    contrats:p.contrats, prix:p.prixActuel, frais:frais, pnl});
   await gsApi({action:'deletePosition', id});
   positions = positions.filter(x => x.id !== id);
   // Mettre à jour le cash : on débourse le prix de rachat, on a déjà reçu la prime
