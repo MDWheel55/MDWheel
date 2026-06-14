@@ -405,6 +405,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </div>
     <div id="f-section-stock" style="display:none">
     <div class="fgrid">
+      <div class="ff"><label>Opération</label><select id="f-stk-op"><option value="ACHAT">Achat (ouverture/ajout)</option><option value="VENTE">Vente (fermeture/réduction)</option></select></div>
       <div class="ff"><label>Symbole</label><select id="f-stk-sym" onchange="autoStockDevise()">
         <option value="CBIL-C">CBIL-C — GLB X 0-3M T-BILL (CAD)</option>
         <option value="VEQT-C">VEQT-C — Vanguard All-EQ (CAD)</option>
@@ -412,11 +413,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
         <option value="GLD-U">GLD-U — SPDR Gold Trust (USD)</option>
         <option value="IBIT-U">IBIT-U — iShares Bitcoin Trust (USD)</option>
         <option value="SPYM-U">SPYM-U — SPDR S&P 500 (USD)</option>
-        <option value="UBIL.U">UBIL.U — GLB X 0-3M US T-Bill (USD)</option>
+        <option value="UBIL.U-C">UBIL.U-C — GLB X 0-3M US T-Bill (USD)</option>
       </select></div>
-      <div class="ff"><label>Devise</label><select id="f-stk-dev"><option value="CAD">CAD</option><option value="USD">USD</option></select></div>
+      <div class="ff"><label>Devise (règlement)</label><select id="f-stk-dev"><option value="CAD">CAD</option><option value="USD">USD</option></select></div>
       <div class="ff"><label>Nombre d'actions</label><input type="number" id="f-stk-qty" value="100" min="1"></div>
-      <div class="ff"><label>Prix d'achat moyen ($)</label><input type="number" id="f-stk-prix" value="50" step="0.01"></div>
+      <div class="ff"><label>Prix unitaire ($)</label><input type="number" id="f-stk-prix" value="50" step="0.01"></div>
+      <div class="ff"><label>Frais ($)</label><input type="number" id="f-stk-frais" value="0" step="0.01"></div>
     </div>
     </div></div>
     <div class="modal-actions">
@@ -1545,12 +1547,14 @@ function renderTrades(rawTrades) {
 function openOptModal(id) { openModal(id); }
 function openStkModal() {
   editingId = null;
-  document.getElementById('modal-ttl').textContent = 'Nouvelle position action';
+  document.getElementById('modal-ttl').textContent = 'Transaction action (achat / vente)';
   setMode('stock');
+  document.getElementById('f-stk-op').value='ACHAT';
   document.getElementById('f-stk-sym').value='CBIL-C';
   document.getElementById('f-stk-dev').value='CAD';
   document.getElementById('f-stk-qty').value='100';
   document.getElementById('f-stk-prix').value='50';
+  document.getElementById('f-stk-frais').value='0';
   document.getElementById('modal').classList.add('show');
 }
 
@@ -1855,39 +1859,112 @@ async function deletePos(id) {
 }
 
 function autoStockDevise() {
-  // Ajuste automatiquement la devise selon le symbole (-C = CAD, -U/.U = USD)
+  // Devise de RÈGLEMENT selon le symbole (validé contre Disnat) :
+  // -C = CAD, sauf UBIL.U-C qui se règle en USD malgré le -C
+  // -U / .U = USD
   const sym = document.getElementById('f-stk-sym').value || '';
-  const dev = (sym.endsWith('-U') || sym.endsWith('.U')) ? 'USD' : 'CAD';
+  let dev;
+  if (sym === 'UBIL.U-C') dev = 'USD';            // marché CAN mais règlement USD
+  else if (sym.endsWith('-U') || sym.endsWith('.U')) dev = 'USD';
+  else dev = 'CAD';
   const el = document.getElementById('f-stk-dev');
   if (el) el.value = dev;
 }
 
 async function saveStock() {
-  const sym    = (document.getElementById('f-stk-sym').value||'').trim().toUpperCase();
-  const nom    = sym;
+  const op     = document.getElementById('f-stk-op').value || 'ACHAT';
+  const sym    = (document.getElementById('f-stk-sym').value||'').trim();
   const dev    = document.getElementById('f-stk-dev').value||'USD';
   const qty    = parseFloat(document.getElementById('f-stk-qty').value)||0;
   const prix   = parseFloat(document.getElementById('f-stk-prix').value)||0;
-  const actuel = prix; // Finnhub mettra à jour le prix réel
-  if(!sym||qty<=0){ alert('Symbole et quantité requis'); return; }
-  const data = {
-    ticker:nom, type:'STOCK', strike:f2(prix), expiration:'—',
-    dte:'0', contrats:String(qty), prime:f2(prix*qty),
-    prixActuel:f2(actuel*qty), statut:'stock', occ:sym
-  };
+  const frais  = parseFloat(document.getElementById('f-stk-frais').value)||0;
+  if(!sym||qty<=0||prix<=0){ alert('Symbole, quantité et prix requis'); return; }
+
+  // Trouver la position existante dans actionsData
+  const existing = actionsData.find(a => a.symbole === sym);
+  const today = new Date().toISOString().slice(0,10);
+  const tradeId = 'TXA-'+Date.now();
+  // Montant net (frais inclus) : achat débite, vente crédite
+  const brut = qty * prix;
+  const montant = (op === 'ACHAT') ? -(brut + frais) : (brut - frais);
+
   setSyncStatus(false,'Sauvegarde...');
-  const r = await gsApi({action:'savePosition',...data});
-  if(r){
-    data.id=r.id;
-    positions.push(data);
-    // Impact cash
-    const impact = dev==='USD' ? 'achat-action-usd' : 'achat-action-cad';
-    applyImpact(impact, {prime:prix, contrats:qty/100, strike:prix, ticker:sym});
-    await gsApi({action:'saveTrade',tradeId:r.id,ticker:nom,type:'STOCK',
-      strike:f2(prix),expiration:'—',tradeAction:'BTO',contrats:String(qty),prix:f2(prix),pnl:0});
+
+  if (op === 'ACHAT') {
+    if (existing) {
+      // Coût moyen pondéré : (ancien coût total + nouveau coût) / (ancienne qté + nouvelle qté)
+      const ancienCoutTotal = existing.quantite * existing.coutMoyen;
+      const nouveauCoutTotal = ancienCoutTotal + brut + frais; // frais inclus dans le coût de base
+      const nouvelleQte = existing.quantite + qty;
+      const nouveauCoutMoyen = nouveauCoutTotal / nouvelleQte;
+      existing.quantite = nouvelleQte;
+      existing.coutMoyen = nouveauCoutMoyen;
+      await gsApi({action:'updateAction', id:existing.id,
+        quantite:nouvelleQte, coutMoyen:f2(nouveauCoutMoyen)});
+    } else {
+      // Nouvelle position — coût moyen = (prix*qté + frais) / qté
+      const coutMoyen = (brut + frais) / qty;
+      const r = await gsApi({action:'saveAction',
+        symbole:sym, nom:sym, devise:dev, quantite:qty, coutMoyen:f2(coutMoyen)});
+      if (r && r.id) {
+        actionsData.push({id:r.id, symbole:sym, nom:sym, devise:dev, quantite:qty, coutMoyen:coutMoyen});
+      }
+    }
+    // Débiter le cash
+    adjustCash(dev, montant);
+    // Enregistrer la transaction
+    await gsApi({action:'saveTradeAction', tradeId, date:today, symbole:sym, nom:sym,
+      devise:dev, operation:'ACHAT', quantite:qty, prix:f2(prix), montant:f2(montant), frais:f2(frais)});
+
+  } else { // VENTE
+    if (!existing) { alert('Aucune position '+sym+' à vendre'); setSyncStatus(true,''); return; }
+    if (qty > existing.quantite) { alert('Quantité à vendre ('+qty+') > quantité détenue ('+existing.quantite+')'); setSyncStatus(true,''); return; }
+    // P&L réalisé = (prix vente - coût moyen) * qté - frais
+    const pnl = Math.round((prix - existing.coutMoyen) * qty - frais);
+    const nouvelleQte = existing.quantite - qty;
+    // Le coût moyen reste inchangé à la vente (méthode coût moyen pondéré)
+    if (nouvelleQte <= 0) {
+      // Position fermée
+      await gsApi({action:'deleteAction', id:existing.id});
+      actionsData = actionsData.filter(a => a.id !== existing.id);
+    } else {
+      existing.quantite = nouvelleQte;
+      await gsApi({action:'updateAction', id:existing.id, quantite:nouvelleQte});
+    }
+    // Créditer le cash
+    adjustCash(dev, montant);
+    // Enregistrer la transaction avec P&L
+    await gsApi({action:'saveTradeAction', tradeId, date:today, symbole:sym, nom:sym,
+      devise:dev, operation:'VENTE', quantite:qty, prix:f2(prix), montant:f2(montant), frais:f2(frais), pnl});
+    if (!confirm('Vente enregistrée. P&L réalisé: $'+fi(pnl)+' '+dev+'\n(prix '+f2(prix)+' − coût moyen '+f2(existing.coutMoyen||0)+', frais '+f2(frais)+')\n\nOK pour continuer.')) {}
   }
-  setSyncStatus(true,'✓ Sauvegardé');
-  closeModal(); renderPositions(); renderStocks(); recalcDash(); recalcCompte();
+
+  syncAcctFromActions();
+  setSyncStatus(true,'✓ '+op+' enregistré');
+  closeModal();
+  renderActionsTable();
+  recalcDash();
+  recalcCompte();
+  // Rafraîchir l'historique des actions si la vue existe
+  const ta = await gsApi({action:'getTradesActions'});
+  if (ta && typeof renderTradesActions === 'function') renderTradesActions(ta);
+}
+
+// Ajuste le cash USD ou CAD du montant donné, persiste dans Compte
+function adjustCash(devise, montant) {
+  if (devise === 'USD') {
+    const cur = parseFloat(gv('m-cash','24084'))||0;
+    const nv = Math.round((cur + montant)*100)/100;
+    const el = document.getElementById('m-cash'); if(el) el.value = nv;
+    const elc = document.getElementById('c-cash-usd'); if(elc) elc.value = nv;
+    saveField('CashUSD', nv);
+  } else {
+    const cur = parseFloat(gv('m-cashcad','73661'))||0;
+    const nv = Math.round((cur + montant)*100)/100;
+    const el = document.getElementById('m-cashcad'); if(el) el.value = nv;
+    const elc = document.getElementById('c-cash-cad'); if(elc) elc.value = nv;
+    saveField('CashCAD', nv);
+  }
 }
 
 async function autoCloseExpired() {
