@@ -460,6 +460,26 @@ function gv(id, def) {
 var acctQty = {VEQT:722, XEG:456, SPYM:365, CBIL:4000, UBIL:1600, GLD:9, IBIT:600};
 // Prix d'achat moyen (coût moyen Disnat)
 var acctCost = {VEQT:54.94, XEG:25.72, SPYM:78.54, CBIL:50.01, UBIL:50.02, GLD:408.67, IBIT:34.85}; // coûts moyens Disnat
+// Actions chargées depuis Positions_Actions (source de vérité unique) — voir loadAll()
+var actionsData = [];
+
+// Normalise un symbole Disnat (CBIL-C, UBIL.U-C, GLD-U) vers la clé courte (CBIL, UBIL, GLD)
+function symKey(symbole) {
+  if (!symbole) return '';
+  // Retirer les suffixes Disnat: -C (CAD), -U (USD), .U-C, .U
+  return symbole.replace(/\.U-C$/i,'').replace(/-[CU]$/i,'').replace(/\.U$/i,'').toUpperCase();
+}
+
+// Alimente acctQty et acctCost à partir de actionsData (Sheets = source de vérité)
+function syncAcctFromActions() {
+  actionsData.forEach(a => {
+    const key = symKey(a.symbole);
+    if (key) {
+      acctQty[key] = a.quantite;
+      acctCost[key] = a.coutMoyen;
+    }
+  });
+}
 // Prix marché actuels (Disnat 9 juin 2026)
 // CBIL:50.03, VEQT:59.19, XEG:26.11, GLD:391.39, IBIT:34.94, SPYM:85.75, UBIL:50.05
 
@@ -533,11 +553,20 @@ async function reloadFromSheets() {
 
 async function loadAll() {
   setSyncStatus(false, 'Chargement...');
-  const [pos, cpt, trades] = await Promise.all([
+  const [pos, cpt, trades, actions] = await Promise.all([
     gsApi({action:'getPositions'}),
     gsApi({action:'getCompte'}),
-    gsApi({action:'getTrades'})
+    gsApi({action:'getTrades'}),
+    gsApi({action:'getActions'})
   ]);
+  // Charger les actions depuis Positions_Actions (source de vérité unique)
+  if (actions && actions.length > 0) {
+    actionsData = actions.map(a => ({
+      id: a.id, symbole: a.symbole, nom: a.nom, devise: a.devise,
+      quantite: parseFloat(a.quantite) || 0, coutMoyen: parseFloat(a.coutMoyen) || 0
+    }));
+    syncAcctFromActions();
+  }
   if (pos && pos.length > 0) {
     // Sanitiser les options : corriger les valeurs aberrantes de Sheets
     // Cas connu : expiration stockée comme numéro de série Excel (ex: 46165 au lieu de '2028-01-17')
@@ -2451,18 +2480,26 @@ function renderActionsTable() {
   var m   = calcMarge();
   var fx2 = m.fx;
 
-  // Actions avec prix d'achat réels (Disnat)
-  var actions = [
-    // CAD
-    {sym:'CBIL-C', nom:'GLB X 0-3M T-BILL-A ETF',  dev:'CAD', qty:acctQty.CBIL, pxAchat:acctCost.CBIL, pxAct:mkt.CBIL||50.01, taux:70, key:'CBIL', usd:false},
-    {sym:'VEQT-C', nom:'VANGUARD ALL-EQ ETF PTFL',  dev:'CAD', qty:acctQty.VEQT, pxAchat:acctCost.VEQT, pxAct:mkt.VEQT||60.40, taux:70, key:'VEQT', usd:false},
-    {sym:'XEG-C',  nom:'ISHARES S&PTSX CAP EN ETF', dev:'CAD', qty:acctQty.XEG,  pxAchat:acctCost.XEG,  pxAct:mkt.XEG||27.00,  taux:60, key:'XEG',  usd:false},
-    // USD
-    {sym:'GLD-U',  nom:'SPDR GOLD TRUST ETF',       dev:'USD', qty:acctQty.GLD,  pxAchat:acctCost.GLD,  pxAct:mkt.GLD||400,    taux:70, key:'GLD',  usd:true},
-    {sym:'IBIT-U', nom:'ISHARES BITCOIN TRUST ETF', dev:'USD', qty:acctQty.IBIT, pxAchat:acctCost.IBIT, pxAct:mkt.IBIT||34.85, taux:parseFloat(gv('c-ibit','50')), key:'IBIT', usd:true},
-    {sym:'SPYM-U', nom:'SPDR SS SPDR S&P 500 ETF',  dev:'USD', qty:acctQty.SPYM, pxAchat:acctCost.SPYM, pxAct:mkt.SPYM||73.57, taux:70, key:'SPYM', usd:true},
-    {sym:'UBIL.U', nom:'GLB X 0-3M US TBILL-A ETF', dev:'USD', qty:acctQty.UBIL, pxAchat:acctCost.UBIL, pxAct:mkt.UBIL||50.02, taux:70, key:'UBIL', usd:true},
-  ];
+  // Actions chargées depuis Positions_Actions (Sheets) — source de vérité unique
+  // Mapper chaque symbole à sa clé de prix Finnhub et son taux d'emprunt
+  var fnKey = function(sym){
+    // "CBIL-C" -> "CBIL", "UBIL.U-C" -> "UBIL", "GLD-U" -> "GLD"
+    return sym.replace(/\.U/,'').replace(/-[CU]$/,'').replace(/-U$/,'');
+  };
+  var tauxMap = {CBIL:70, VEQT:70, XEG:60, GLD:70, IBIT:parseFloat(gv('c-ibit','50')), SPYM:70, UBIL:70};
+  var pxDefaut = {CBIL:50.01, VEQT:60.40, XEG:27.00, GLD:400, IBIT:34.85, SPYM:73.57, UBIL:50.02};
+
+  var actions = actionsData.map(function(a){
+    var key = fnKey(a.symbole);
+    return {
+      sym: a.symbole, nom: a.nom, dev: a.devise,
+      qty: a.quantite, pxAchat: a.coutMoyen,
+      pxAct: mkt[key] || pxDefaut[key] || a.coutMoyen,
+      taux: tauxMap[key] || 70, key: key, usd: (a.devise === 'USD')
+    };
+  });
+  // Sécurité : si actionsData pas encore chargé, ne rien afficher (évite crash)
+  if (actions.length === 0) { return; }
 
   var totalUSD=0, totalEmprUSD=0, totalPnlUSD=0;
   var rowsCAD=[], rowsUSD=[];
