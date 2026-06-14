@@ -1297,7 +1297,7 @@ function renderTrades(rawTrades) {
     type:       t.type       || t.Type       || '',
     strike:     t.strike     || t.Strike     || '',
     expiration: fmtDate(t.expiration || t.Expiration || ''),
-    action:     t.action     || t.Action     || '',
+    action:     t.tradeAction || t.TradeAction || t.action || t.Action || '',
     contrats:   t.contrats   || t.Contrats   || '',
     prix:       t.prix       || t.Prix       || t.price || t.Price || 0,
     pnl:        t.pnl        || t.Pnl        || t.PnL  || 0,
@@ -1307,7 +1307,9 @@ function renderTrades(rawTrades) {
   body.innerHTML = trades.length
     ? trades.map(t => {
         const tkCls = t.ticker==='QQQ'?'tq':t.ticker==='SPY'?'ts':t.ticker==='GLD'?'tg':'tn';
-        const actCls = t.action==='STO'?'tgd':t.action==='BTC'?'tga':'tgb';
+        // STO/BTO = ouverture (vert), BTC/STC/EXP = fermeture, ASSIGN = neutre
+        const a = t.action;
+        const actCls = (a==='STO'||a==='BTO')?'tgd':(a==='BTC'||a==='STC')?'tga':(a==='EXP')?'tgg':'tgb';
         const pnl = parseFloat(t.pnl)||0;
         return '<tr>' +
           '<td style="font-size:10px">'+t.date+'</td>' +
@@ -1666,14 +1668,89 @@ async function saveStock() {
   closeModal(); renderPositions(); renderStocks(); recalcDash(); recalcCompte();
 }
 
+async function autoCloseExpired() {
+  // Détecte les positions short dont l'expiration est passée et génère
+  // automatiquement une transaction de fermeture "Expiration"
+  // Pour un short put expiré sans valeur : gain réalisé = prime complète encaissée
+  const today = new Date(); today.setHours(0,0,0,0);
+  const expired = positions.filter(p => {
+    if (!p.expiration) return false;
+    if (p.statut !== 'short' && p.statut !== 'short-call') return false;
+    const exp = new Date(p.expiration + 'T00:00:00');
+    return !isNaN(exp) && exp < today;
+  });
+  if (expired.length === 0) return 0;
+  let count = 0;
+  for (const p of expired) {
+    const contr = Math.abs(parseInt(p.contrats)||1);
+    // Expiration sans valeur : on garde toute la prime
+    const pnl = Math.round(parseFloat(p.prime) * 100 * contr);
+    await gsApi({action:'saveTrade', tradeId:p.id+'-exp',
+      date:p.expiration, ticker:p.ticker, type:p.type,
+      strike:p.strike, expiration:p.expiration, tradeAction:'EXP',
+      contrats:p.contrats, prix:'0', pnl});
+    await gsApi({action:'deletePosition', id:p.id});
+    positions = positions.filter(x => x.id !== p.id);
+    count++;
+  }
+  if (count > 0) {
+    setSyncStatus(true, '✓ ' + count + ' position(s) expirée(s) clôturée(s)');
+  }
+  return count;
+}
+
 async function fermerPos(id) {
   const p = positions.find(x => x.id === id);
   if (!p) return;
-  const pc  = ppct(parseFloat(p.prime), parseFloat(p.prixActuel));
-  const pnl = Math.round((parseFloat(p.prime) - parseFloat(p.prixActuel)) * 100 * parseInt(p.contrats));
-  const coutRachat = Math.round(parseFloat(p.prixActuel) * 100 * parseInt(p.contrats));
-  if (!confirm('Fermer à ' + pc + '% de profit? P&L: $' + fi(pnl) + ' | Coût rachat: $' + fi(coutRachat) + ' USD')) return;
+  // Demander le type de fermeture
+  const typeFerm = prompt(
+    'Type de fermeture?\n\n' +
+    '1 = Rachat (BTC) — je rachète l\'option\n' +
+    '2 = Expiration — expire sans valeur\n' +
+    '3 = Assignation — je suis assigné(e)\n\n' +
+    'Entrez 1, 2 ou 3:', '1');
+  if (typeFerm === null) return; // annulé
+  const contr = Math.abs(parseInt(p.contrats)||1);
+  const prime = parseFloat(p.prime);
   const closDate = new Date().toISOString().slice(0,10);
+
+  if (typeFerm === '2') {
+    // EXPIRATION — gain = prime complète
+    const pnl = Math.round(prime * 100 * contr);
+    if (!confirm('Marquer comme expirée? Gain réalisé: $' + fi(pnl) + ' (prime complète)')) return;
+    await gsApi({action:'saveTrade', tradeId:p.id+'-exp', date:p.expiration||closDate,
+      ticker:p.ticker, type:p.type, strike:p.strike, expiration:p.expiration,
+      tradeAction:'EXP', contrats:p.contrats, prix:'0', pnl});
+    await gsApi({action:'deletePosition', id});
+    positions = positions.filter(x => x.id !== id);
+    const trades = await gsApi({action:'getTrades'});
+    if (trades) renderTrades(trades);
+    setSyncStatus(true, '✓ Expirée — Gain: $' + fi(pnl));
+    renderPositions(); recalcDash(); recalcCompte();
+    return;
+  }
+
+  if (typeFerm === '3') {
+    // ASSIGNATION — pas de gain en capital sur l'option; la prime ajuste le coût des actions
+    if (!confirm('Marquer comme assignée?\n\nLa prime de $' + fi(Math.round(prime*100*contr)) +
+                 ' ajustera le coût des actions (pas de gain en capital sur l\'option).')) return;
+    await gsApi({action:'saveTrade', tradeId:p.id+'-assign', date:closDate,
+      ticker:p.ticker, type:p.type, strike:p.strike, expiration:p.expiration,
+      tradeAction:'ASSIGN', contrats:p.contrats, prix:p.strike, pnl:0});
+    await gsApi({action:'deletePosition', id});
+    positions = positions.filter(x => x.id !== id);
+    const trades = await gsApi({action:'getTrades'});
+    if (trades) renderTrades(trades);
+    setSyncStatus(true, '✓ Assignée — prime ajuste coût actions');
+    renderPositions(); recalcDash(); recalcCompte();
+    return;
+  }
+
+  // typeFerm === '1' : RACHAT (BTC) — comportement par défaut
+  const pc  = ppct(prime, parseFloat(p.prixActuel));
+  const pnl = Math.round((prime - parseFloat(p.prixActuel)) * 100 * contr);
+  const coutRachat = Math.round(parseFloat(p.prixActuel) * 100 * contr);
+  if (!confirm('Racheter à ' + pc + '% de profit? P&L: $' + fi(pnl) + ' | Coût rachat: $' + fi(coutRachat) + ' USD')) return;
   await gsApi({action:'saveTrade', tradeId:p.id+'-close', date:closDate, ticker:p.ticker, type:p.type,
     strike:p.strike, expiration:p.expiration, tradeAction:'BTC',
     contrats:p.contrats, prix:p.prixActuel, pnl});
@@ -1692,7 +1769,7 @@ async function fermerPos(id) {
   }
   const trades = await gsApi({action:'getTrades'});
   if (trades) renderTrades(trades);
-  setSyncStatus(true, '✓ Fermé — P&L: $' + fi(pnl));
+  setSyncStatus(true, '✓ Racheté — P&L: $' + fi(pnl));
   renderPositions(); recalcDash(); recalcCompte();
 }
 
@@ -2374,7 +2451,21 @@ function recalcCompte() {
 renderStrip();
 recalcDash();
 updateDispValues();
-loadAll().then(function(){ recalcCompte(); renderActionsTable(); updateDispValues(); });
+// Démarrage automatique : charge Sheets, ferme les expirations, actualise tout
+loadAll().then(async function(){
+  recalcCompte();
+  renderActionsTable();
+  updateDispValues();
+  // Auto-fermeture des positions expirées
+  const nbExpired = await autoCloseExpired();
+  if (nbExpired > 0) {
+    renderPositions(); recalcDash(); recalcCompte();
+    const trades = await gsApi({action:'getTrades'});
+    if (trades) renderTrades(trades);
+  }
+  // Actualisation automatique des prix au démarrage
+  actualiserTout();
+});
 </script>
 </body>
 </html>
