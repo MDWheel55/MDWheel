@@ -788,6 +788,12 @@ async function parseOCC(occ) {
 async function fetchOptPrice(occ) {
   const info = await parseOCC(occ);
 
+  // Essai 0: proxy Apps Script (UrlFetchApp côté serveur — aucun CORS, fiable)
+  try {
+    const r = await gsApi({action:'getOptionPrice', occ});
+    if (r && parseFloat(r.price) > 0) return parseFloat(r.price);
+  } catch(e) {}
+
   // Essai 1: serveur local Python (aucun problème CORS!)
   try {
     const ctrl = new AbortController();
