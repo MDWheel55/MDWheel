@@ -412,7 +412,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
       <div class="ff"><label>Prime reçue ($)</label><input type="number" id="f-prime" value="20" step="0.01"></div>
       <div class="ff"><label>Frais ($ USD)</label><input type="number" id="f-frais" value="5" step="0.01"></div>
       <div class="ff"><label>DTE (jours)</label><input type="number" id="f-dte" value="540" readonly style="opacity:0.6;cursor:not-allowed"></div>
-      <div class="ff"><label>Statut</label><select id="f-statut" onchange="autoImpact()"><option value="short">Short (vendu)</option><option value="long">Long (acheté)</option><option value="short-call">Short Call</option><option value="long-call">Long Call</option></select></div>
+      <div class="ff"><label>Opération</label><select id="f-statut" onchange="autoImpact()"><option value="STO">STO — Vendre pour ouvrir</option><option value="STC">STC — Vendre pour fermer</option><option value="BTO">BTO — Acheter pour ouvrir</option><option value="BTC">BTC — Acheter pour fermer</option><option value="EXP">EXP — Expiration</option></select></div>
       <div class="ff ff-full"><label>Symbole OCC (ex: QQQ271217P00520000)</label><input type="text" id="f-occ" placeholder="QQQ271217P00520000"></div>
     </div>
     </div>
@@ -1189,9 +1189,9 @@ function calcDTE() {
 }
 
 function autoImpact() {
-  const statut = document.getElementById('f-statut').value;
-  const map = { short:'vente-put', long:'achat-put', 'short-call':'aucun', 'long-call':'achat-put' };
-  const target = map[statut] || 'aucun';
+  const op = document.getElementById('f-statut').value;
+  const map = { STO:'vente-put', BTO:'achat-put', BTC:'achat-put', STC:'vente-put', EXP:'aucun' };
+  const target = map[op] || 'aucun';
   const radio = document.querySelector('input[name="f-impact"][value="'+target+'"]');
   if (radio) { radio.checked = true; updateImpactPreview(); }
 }
@@ -1373,7 +1373,7 @@ function normalizeTrades(rawTrades) {
     type:       t.type || t.Type || '',
     strike:     t.strike || t.Strike || '',
     expiration: fmtDate(t.expiration || t.Expiration || ''),
-    action:     t.tradeAction || t.TradeAction || t.action || t.Action || '',
+    action:     t.operation || t.Operation || t.tradeAction || t.TradeAction || t.action || t.Action || '',
     contrats:   t.contrats || t.Contrats || '',
     prix:       t.prix || t.Prix || t.price || t.Price || 0,
     frais:      parseFloat(t.frais || t.Frais || 0) || 0,
@@ -1527,7 +1527,7 @@ function renderTrades(rawTrades) {
     type:       t.type       || t.Type       || '',
     strike:     t.strike     || t.Strike     || '',
     expiration: fmtDate(t.expiration || t.Expiration || ''),
-    action:     t.tradeAction || t.TradeAction || t.action || t.Action || '',
+    action:     t.operation || t.Operation || t.tradeAction || t.TradeAction || t.action || t.Action || '',
     contrats:   t.contrats   || t.Contrats   || '',
     prix:       t.prix       || t.Prix       || t.price || t.Price || 0,
     pnl:        t.pnl        || t.Pnl        || t.PnL  || 0,
@@ -1634,7 +1634,7 @@ function openModal(id) {
       document.getElementById('f-exp').value     = toDateInput(p.expiration);
       document.getElementById('f-cont').value    = p.contrats|| '1';
       document.getElementById('f-prime').value   = p.prime   || '';
-      document.getElementById('f-statut').value  = p.statut  || 'short';
+      document.getElementById('f-statut').value  = 'STO';
       document.getElementById('f-occ').value     = p.occ     || '';
       calcDTE();
     }
@@ -1647,7 +1647,7 @@ function openModal(id) {
     document.getElementById('f-prime').value='20';
     document.getElementById('f-frais').value='5';
     document.getElementById('f-dte').value='';
-    document.getElementById('f-statut').value='short';
+    document.getElementById('f-statut').value='STO';
     document.getElementById('f-occ').value='';
     autoImpact();
     setMode('option');
@@ -1715,7 +1715,7 @@ function getFormData() {
     prime:      document.getElementById('f-prime').value,
     frais:      document.getElementById('f-frais').value || '5',
     dte:        String(dte),
-    statut:     document.getElementById('f-statut').value,
+    operation:  document.getElementById('f-statut').value,
     occ:        (document.getElementById('f-occ').value||'').trim().replace(/-U$/,''),
   };
 }
@@ -1748,23 +1748,14 @@ async function _savePositionInner() {
     const idx = positions.findIndex(p => p.id === editingId);
     if (idx > -1) positions[idx] = {...positions[idx], ...data};
   } else {
-    const r = await gsApi({action:'savePosition', ...data});
-    if (r) {
-      data.id = r.id; data.prixActuel = data.prime;
-      positions.push(data);
-      const tradeAction = (data.statut==='long'||data.statut==='long-call') ? 'BTO' : 'STO';
-      const tradeDate = new Date().toISOString().slice(0,10);
-      const frais = parseFloat(data.frais)||5;
-      await gsApi({action:'saveTrade', tradeId:r.id, date:tradeDate,
-        ticker:data.ticker, type:data.type,
-        strike:data.strike, expiration:data.expiration, tradeAction:tradeAction,
-        contrats:data.contrats, prix:data.prime, frais:frais, pnl:0});
-      // Appliquer l'impact sur cash et quantités
-      applyImpact(impact, data);
-      // Rafraîchir l'historique
-      const trades = await gsApi({action:'getTrades'});
-      if (trades) renderTrades(trades);
-    }
+    // Event-sourcing : on envoie UNIQUEMENT le trade ; le moteur reconstruit positions + cash.
+    const tradeDate = new Date().toISOString().slice(0,10);
+    const frais = parseFloat(data.frais)||5;
+    await gsApi({action:'saveTrade', date:tradeDate,
+      operation:data.operation, ticker:data.ticker, type:data.type,
+      strike:data.strike, expiration:data.expiration,
+      contrats:data.contrats, prix:data.prime, frais:frais, occ:data.occ});
+    await loadAll();
   }
   setSyncStatus(true, '✓ Sauvegardé');
   closeModal(); renderPositions(); recalcDash(); recalcCompte();
@@ -1994,15 +1985,14 @@ async function autoCloseExpired() {
     const contr = Math.abs(parseInt(p.contrats)||1);
     // Expiration sans valeur : on garde toute la prime
     const pnl = Math.round(parseFloat(p.prime) * 100 * contr);
-    await gsApi({action:'saveTrade', tradeId:p.id+'-exp',
-      date:p.expiration, ticker:p.ticker, type:p.type,
-      strike:p.strike, expiration:p.expiration, tradeAction:'EXP',
-      contrats:p.contrats, prix:'0', pnl});
-    await gsApi({action:'deletePosition', id:p.id});
-    positions = positions.filter(x => x.id !== p.id);
+    await gsApi({action:'saveTrade',
+      date:p.expiration, operation:'EXP', ticker:p.ticker, type:p.type,
+      strike:p.strike, expiration:p.expiration,
+      contrats:p.contrats, prix:'0', frais:0, occ:p.occ});
     count++;
   }
   if (count > 0) {
+    await loadAll();
     setSyncStatus(true, '✓ ' + count + ' position(s) expirée(s) clôturée(s)');
   }
   return count;
@@ -2034,15 +2024,11 @@ async function fermerPos(id) {
     // EXPIRATION — gain = prime complète, aucun frais (pas de transaction)
     const pnl = Math.round(prime * 100 * contr);
     if (!confirm('Marquer comme expirée? Gain réalisé: $' + fi(pnl) + ' (prime complète, aucun frais)')) return;
-    await gsApi({action:'saveTrade', tradeId:p.id+'-exp', date:p.expiration||closDate,
-      ticker:p.ticker, type:p.type, strike:p.strike, expiration:p.expiration,
-      tradeAction:'EXP', contrats:p.contrats, prix:'0', frais:0, pnl});
-    await gsApi({action:'deletePosition', id});
-    positions = positions.filter(x => x.id !== id);
-    const trades = await gsApi({action:'getTrades'});
-    if (trades) renderTrades(trades);
+    await gsApi({action:'saveTrade', date:p.expiration||closDate,
+      operation:'EXP', ticker:p.ticker, type:p.type, strike:p.strike, expiration:p.expiration,
+      contrats:p.contrats, prix:'0', frais:0, occ:p.occ});
+    await loadAll();
     setSyncStatus(true, '✓ Expirée — Gain: $' + fi(pnl));
-    renderPositions(); recalcDash(); recalcCompte();
     return;
   }
 
@@ -2050,15 +2036,14 @@ async function fermerPos(id) {
     // ASSIGNATION — pas de gain en capital sur l'option; la prime ajuste le coût des actions
     if (!confirm('Marquer comme assignée?\n\nLa prime de $' + fi(Math.round(prime*100*contr)) +
                  ' ajustera le coût des actions (pas de gain en capital sur l\'option). Frais: $' + fi(frais))) return;
-    await gsApi({action:'saveTrade', tradeId:p.id+'-assign', date:closDate,
-      ticker:p.ticker, type:p.type, strike:p.strike, expiration:p.expiration,
-      tradeAction:'ASSIGN', contrats:p.contrats, prix:p.strike, frais:frais, pnl:0});
-    await gsApi({action:'deletePosition', id});
-    positions = positions.filter(x => x.id !== id);
-    const trades = await gsApi({action:'getTrades'});
-    if (trades) renderTrades(trades);
-    setSyncStatus(true, '✓ Assignée — prime ajuste coût actions');
-    renderPositions(); recalcDash(); recalcCompte();
+    await gsApi({action:'saveTrade', date:closDate,
+      operation:'EXP', ticker:p.ticker, type:p.type, strike:p.strike, expiration:p.expiration,
+      contrats:p.contrats, prix:'0', frais:0, occ:p.occ});
+    await loadAll();
+    alert('Option clôturée (assignation).\n\nÀ FAIRE : saisis la transaction d\'actions correspondante ('
+      + (contr*100) + ' actions de ' + p.ticker + ' @ ' + p.strike + '$) dans l\'onglet Actions, '
+      + 'pour que le coût des actions et le cash soient exacts.');
+    setSyncStatus(true, '✓ Assignée — saisir les actions');
     return;
   }
 
@@ -2069,26 +2054,13 @@ async function fermerPos(id) {
   const pnl = Math.round(pnlBrut - frais);
   const coutRachat = Math.round(parseFloat(p.prixActuel) * 100 * contr);
   if (!confirm('Racheter à ' + pc + '% de profit?\nP&L net (frais $' + fi(frais) + ' déduits): $' + fi(pnl) + '\nCoût rachat: $' + fi(coutRachat) + ' USD')) return;
-  await gsApi({action:'saveTrade', tradeId:p.id+'-close', date:closDate, ticker:p.ticker, type:p.type,
-    strike:p.strike, expiration:p.expiration, tradeAction:'BTC',
-    contrats:p.contrats, prix:p.prixActuel, frais:frais, pnl});
-  await gsApi({action:'deletePosition', id});
-  positions = positions.filter(x => x.id !== id);
-  // Mettre à jour le cash : on débourse le prix de rachat, on a déjà reçu la prime
-  if (p.statut === 'short') {
-    let cashUSD = parseFloat(gv('m-cash','24066'));
-    cashUSD -= coutRachat;
-    cashUSD = Math.round(cashUSD);
-    const elDash = document.getElementById('m-cash');
-    const elCpt  = document.getElementById('c-cash-usd');
-    if(elDash) elDash.value = cashUSD;
-    if(elCpt)  elCpt.value  = cashUSD;
-    saveField('CashUSD', cashUSD);
-  }
-  const trades = await gsApi({action:'getTrades'});
-  if (trades) renderTrades(trades);
-  setSyncStatus(true, '✓ Racheté — P&L: $' + fi(pnl));
-  renderPositions(); recalcDash(); recalcCompte();
+  const isLong = String(p.statut||'').indexOf('long') === 0;
+  const closeOp = isLong ? 'STC' : 'BTC';
+  await gsApi({action:'saveTrade', date:closDate, operation:closeOp, ticker:p.ticker, type:p.type,
+    strike:p.strike, expiration:p.expiration,
+    contrats:p.contrats, prix:p.prixActuel, frais:frais, occ:p.occ});
+  await loadAll();
+  setSyncStatus(true, '✓ ' + (isLong ? 'Vendu (STC)' : 'Racheté (BTC)') + ' — P&L: $' + fi(pnl));
 }
 
 async function updatePrix(id, val) {
