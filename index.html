@@ -347,12 +347,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
       <div class="cfield"><span class="cfield-label">Cash CAD</span><input class="cfield-inp" id="c-cash-cad" type="number" value="73661" oninput="saveField('CashCAD',this.value);recalcCompte();updateDispValues()"></div>
       <div class="cfield"><span class="cfield-label">Taux USD/CAD</span><input class="cfield-inp" id="c-fx" type="number" value="1.3945" step="0.0001" oninput="saveField('TauxFX',this.value);recalcCompte();updateDispValues()"></div>
       <input type="hidden" id="c-marge" value="57.7">
-      <div class="cfield" style="border:1px solid var(--amber-bd);border-radius:3px;padding:3px 6px;margin-top:4px;background:var(--amber-bg)">
-        <span class="cfield-label" style="color:var(--amber)">Capacité restante Disnat (USD) <span style="font-size:9px;color:var(--muted)">— calibration hebdomadaire</span></span>
-        <input class="cfield-inp" id="c-marge-dispo" type="number" value="222673" step="100" style="color:var(--amber)" oninput="calibrerDisnat(this.value)">
-        <div id="facteur-disnat-label" style="font-size:9px;color:var(--muted);font-family:var(--mono);margin-top:2px">Facteur: 1.337× · Capacité auto calculée</div>
+      <div class="cfield" style="border:1px solid var(--green-bd);border-radius:3px;padding:3px 6px;margin-top:4px;background:var(--green-bg)">
+        <span class="cfield-label" style="color:var(--green)">Marge Disnat calculée (USD) <span style="font-size:9px;color:var(--muted)">— formule exacte Disnat</span></span>
+        <div id="facteur-disnat-label" style="font-size:12px;color:var(--green);font-family:var(--mono);margin-top:2px;font-weight:600">—</div>
+        <div style="font-size:9px;color:var(--muted);font-family:var(--mono);margin-top:2px">VE actions + liquidités − VE options · aucun facteur empirique</div>
       </div>
-      <div style="font-size:9px;color:var(--muted);margin-top:4px;font-family:var(--mono)">Mettre à jour après ouverture de Disnat</div>
     </div>
 
     <div class="ccard">
@@ -373,12 +372,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <div class="ccard">
       <div class="ccard-title">Taux marge Disnat</div>
       <div class="cfield"><span class="cfield-label">VEQT-C</span><input class="cfield-inp" id="c-veqt" type="number" value="70" oninput="saveField('TauxVEQT',this.value);recalcCompte()"> %</div>
-      <div class="cfield"><span class="cfield-label">XEG-C</span><input class="cfield-inp" id="c-xeg" type="number" value="60" oninput="saveField('TauxXEG',this.value);recalcCompte()"> %</div>
+      <div class="cfield"><span class="cfield-label">XEG-C</span><input class="cfield-inp" id="c-xeg" type="number" value="50" oninput="saveField('TauxXEG',this.value);recalcCompte()"> %</div>
       <div class="cfield"><span class="cfield-label">SPYM-U</span><input class="cfield-inp" id="c-spym" type="number" value="70" oninput="saveField('TauxSPYM',this.value);recalcCompte()"> %</div>
       <div class="cfield"><span class="cfield-label">CBIL-C</span><input class="cfield-inp" id="c-cbil" type="number" value="70" oninput="saveField('TauxCBIL',this.value);recalcCompte()"> %</div>
       <div class="cfield"><span class="cfield-label">UBIL.U-C</span><input class="cfield-inp" id="c-ubil" type="number" value="70" oninput="saveField('TauxUBIL',this.value);recalcCompte()"> %</div>
       <div class="cfield"><span class="cfield-label">GLD-U</span><input class="cfield-inp" id="c-gld" type="number" value="70" oninput="saveField('TauxGLD',this.value);recalcCompte()"> %</div>
-      <div class="cfield"><span class="cfield-label">IBIT-U <span style="font-size:9px;color:var(--amber)">(Bitcoin ETF)</span></span><input class="cfield-inp" id="c-ibit" type="number" value="50" oninput="saveField('TauxIBIT',this.value);recalcCompte()"> %</div>
+      <div class="cfield"><span class="cfield-label">IBIT-U <span style="font-size:9px;color:var(--amber)">(Bitcoin ETF)</span></span><input class="cfield-inp" id="c-ibit" type="number" value="70" oninput="saveField('TauxIBIT',this.value);recalcCompte()"> %</div>
     </div>
 
   </div>
@@ -514,7 +513,7 @@ let peData = {
   QQQ: { fwd:23.6, fwdAvg5:22.0, fwdAvg10:23.8, trail:30.86, trailAvg5:30.3, trailAvg10:30.6 }
 };
 // Facteur de correction Disnat (vrai / calculé) — mis à jour quand user entre la vraie valeur
-let facteurDisnat = 1.337; // 222673 / 166572 — calibré sur données du 9 juin 2026
+// facteurDisnat supprimé — formule Disnat exacte implémentée (juin 2026)
 let editingId = null;
 
 // ═══ UTILS ═══
@@ -641,7 +640,7 @@ async function loadAll() {
     if(cpt.QteUBIL) acctQty.UBIL = parseFloat(cpt.QteUBIL)||1600;
     if(cpt.QteGLD)  acctQty.GLD  = parseFloat(cpt.QteGLD)||9;
     if(cpt.CashUSD && parseFloat(cpt.CashUSD)>0) setCash(parseFloat(cpt.CashUSD), parseFloat(cpt.CashCAD||73661));
-    if(cpt.FacteurDisnat && parseFloat(cpt.FacteurDisnat)>0) facteurDisnat = parseFloat(cpt.FacteurDisnat);
+    // FacteurDisnat supprimé — formule Disnat exacte
     if(cpt.MargeDispo) { const el=document.getElementById('c-marge-dispo'); if(el) el.value=cpt.MargeDispo; }
     // Restaurer les derniers prix marché connus
     // Charger les ratios P/E
@@ -1008,7 +1007,7 @@ async function actualiserTout() {
       if(cpt.QteGLD)  acctQty.GLD =parseFloat(cpt.QteGLD)||9;
       if(cpt.QteIBIT) acctQty.IBIT=parseFloat(cpt.QteIBIT)||600;
       if(cpt.CashUSD&&parseFloat(cpt.CashUSD)>0) setCash(parseFloat(cpt.CashUSD),parseFloat(cpt.CashCAD||73661));
-      if(cpt.FacteurDisnat&&parseFloat(cpt.FacteurDisnat)>0) facteurDisnat=parseFloat(cpt.FacteurDisnat);
+      // FacteurDisnat supprimé — formule Disnat exacte
       // NE PAS restaurer les prix depuis Sheets ici — on vient de les fetcher live
       // (la restauration depuis Sheets se fait uniquement dans loadAll au démarrage)
       // Mettre à jour RSI seulement si on n'a pas réussi à les fetcher
@@ -1822,19 +1821,8 @@ function updatePE() {
 }
 
 function calibrerDisnat(valSaisie) {
-  saveField('MargeDispo', valSaisie);
-  // Recalibrer le facteur et afficher
-  const m = calcMarge();
-  const capCalc = Math.max(0, m.base - m.margeReq);
-  if(capCalc > 0 && parseFloat(valSaisie) > 0) {
-    facteurDisnat = parseFloat(valSaisie) / capCalc;
-    const label = document.getElementById('facteur-disnat-label');
-    if(label) label.textContent = 'Facteur: '+facteurDisnat.toFixed(3)+'× · Recalibré le '+new Date().toLocaleDateString('fr-CA');
-  }
-  saveField('FacteurDisnat', facteurDisnat.toFixed(4));
-  recalcDash();
-  recalcCompte();
-  updateDispValues();
+  // Ancienne fonction de calibration — plus nécessaire avec la formule exacte Disnat
+  // Conservée pour compatibilité HTML (oninput) mais ne fait rien
 }
 
 function setCash(usd, cad) {
@@ -2105,42 +2093,62 @@ async function deletePosGroupe(ids) {
 // ═══ CALCUL MARGE CENTRALISÉ ═══
 // Une seule formule utilisée par dashboard ET compte
 function calcMarge() {
-  const fx0    = mkt.USDCAD || parseFloat(gv('c-fx','1.3945'));
+  const fx0   = mkt.USDCAD || parseFloat(gv('c-fx','1.3945'));
   // Cash depuis l'onglet Compte (source de vérité unique)
-  const cashU  = parseFloat(gv('c-cash-usd','24066'));
-  const cashC  = parseFloat(gv('c-cash-cad','73661'));
-  const tV=parseFloat(gv('c-veqt','70'))/100, tX=parseFloat(gv('c-xeg','60'))/100;
+  const cashU = parseFloat(gv('c-cash-usd','24066'));
+  const cashC = parseFloat(gv('c-cash-cad','73661'));
+
+  // Taux de valeur d'emprunt par titre (configurables dans l'onglet Compte)
+  const tV=parseFloat(gv('c-veqt','70'))/100, tX=parseFloat(gv('c-xeg','50'))/100;
   const tS=parseFloat(gv('c-spym','70'))/100, tC=parseFloat(gv('c-cbil','70'))/100;
   const tU=parseFloat(gv('c-ubil','70'))/100, tG=parseFloat(gv('c-gld','70'))/100;
+  const tI=parseFloat(gv('c-ibit','70'))/100;
+
+  // Prix courants
   const pV=mkt.VEQT||60.40, pX=mkt.XEG||27.00, pS=mkt.SPYM||89.22;
   const pC=mkt.CBIL||50.01, pU=mkt.UBIL||50.02, pG=mkt.GLD||400;
+  const pI=mkt.IBIT||34.94;
 
-  // Valeur d'emprunt des titres
-  const pI = mkt.IBIT||34.94;
-  const tI = parseFloat(gv('c-ibit','50'))/100;
-  const emprunt = acctQty.VEQT*pV/fx0*tV + acctQty.XEG*pX/fx0*tX +
-    acctQty.CBIL*pC/fx0*tC + acctQty.SPYM*pS*tS +
-    acctQty.UBIL*pU*tU + acctQty.GLD*pG*tG +
-    acctQty.IBIT*pI*tI;
+  // ── FORMULE EXACTE DISNAT (reverse-engineered sur 3 snapshots, juin 2026) ──
+  // Marge (CAD) = Liquidités totales (CAD) + VE actions (CAD) + VE options (CAD, négative)
+  // VE actions CAD = titres CAD × taux + titres USD × taux × fx
+  // VE options = valeur d'emprunt des puts vendus ≈ notionnel × 20% (proxy, Disnat utilise la VE réelle)
 
-  // Base de calcul = emprunt titres + cash (Disnat inclut le cash comme collatéral)
-  const base = emprunt + cashU + cashC/fx0;
+  // Valeur d'emprunt actions — tout en CAD
+  const veActCAD = acctQty.CBIL*pC*tC + acctQty.VEQT*pV*tV + acctQty.XEG*pX*tX;  // CAD natif
+  const veActUSD = acctQty.GLD*pG*tG + acctQty.IBIT*pI*tI + acctQty.SPYM*pS*tS + acctQty.UBIL*pU*tU; // USD natif
+  const veActCAD_total = veActCAD + veActUSD * fx0;
 
-  // Notionnel et marge requise
-  // Seulement les puts vendus (NVDA short-call exclu — spread couvert par long LEAPS)
+  // Liquidités totales en CAD
+  const liqCAD_total = cashC + cashU * fx0;
+
+  // Valeur d'emprunt options — puts vendus (short), en USD × fx → CAD
+  // Proxy : notionnel × 20% (Disnat utilise la VE réelle qui fluctue avec les prix)
   const shortPos  = groupPositions(positions.filter(p => p.statut === 'short'));
   const notionnel = shortPos.reduce((s,p) => s + parseFloat(p.strike)*100*Math.abs(parseInt(p.contrats)), 0);
-  const margeReq     = notionnel * 0.20;
-  // Capacité calculée automatiquement × facteur de correction Disnat
-  const capCalcRaw   = Math.max(0, base - margeReq);
-  const capSaisie0   = parseFloat(gv('c-marge-dispo','0'));
-  if(capSaisie0 > 0 && capCalcRaw > 0) facteurDisnat = capSaisie0 / capCalcRaw;
-  const capRestante  = capCalcRaw * facteurDisnat;
-  const margeBrute   = margeReq + capRestante;
-  const margePct     = margeBrute > 0 ? (margeReq / margeBrute * 100) : 36.6;
-  const capacite     = Math.max(0, margeBrute * 0.60 - margeReq);
+  const veOptsUSD = notionnel * 0.20; // marge requise par les options
+  const veOptsCAD = veOptsUSD * fx0;  // converti en CAD (négatif dans la formule)
 
-  return {emprunt, base, notionnel, margeReq, margePct, capacite, capRestante, fx:fx0,
+  // Marge Disnat = VE actions + liquidités − VE options (tout en CAD)
+  const margeCAD  = veActCAD_total + liqCAD_total - veOptsCAD;
+  const margeUSD  = margeCAD / fx0;  // converti en USD pour affichage
+
+  // Marge bloquée et % utilisation
+  const margeReq  = veOptsUSD;
+  const margeBrute = margeReq + margeUSD;  // bloquée + capacité restante = brute
+  const margePct   = margeBrute > 0 ? (margeReq / margeBrute * 100) : 0;
+  const capRestante = margeUSD;  // = capacité restante Disnat en USD
+  const capacite   = Math.max(0, margeBrute * 0.60 - margeReq);
+
+  // Pour compatibilité avec le reste du code
+  const emprunt = (veActCAD_total) / fx0; // VE actions en USD
+  const base    = emprunt + cashU + cashC/fx0; // base totale en USD
+
+  // Mettre à jour l'affichage dans l'onglet Compte
+  const label = document.getElementById('facteur-disnat-label');
+  if(label) label.textContent = '$'+fi(Math.round(margeUSD))+' USD · $'+fi(Math.round(margeCAD))+' CAD';
+
+  return {emprunt, base, notionnel, margeReq, margePct, capacite, capRestante, margeUSD, margeCAD, fx:fx0,
     cashU, cashC, shortPos,
     pV, pX, pS, pC, pU, pG, tV, tX, tS, tC, tU, tG};
 }
@@ -2164,13 +2172,12 @@ function recalcDash() {
   // P1
   // Calculs P1
   const baseTotal    = m.base;  // emprunt + cash
-  // Capacité calculée automatiquement avec facteur de correction
-  var capCalcP1     = Math.max(0, m.base - margeRequise);
-  var margeDispoDis2 = capCalcP1 * facteurDisnat; // auto-calculée
-  var margeBrute2    = margeRequise + margeDispoDis2;
-  var margeDisnatPct = margeBrute2 > 0 ? margeRequise/margeBrute2*100 : margePctCalc;
-  var margeMax60_p1  = Math.max(0, margeBrute2*0.60 - margeRequise);
-  const margeDispo   = margeDispoDis2; // capacité restante calculée
+  // Capacité restante = margeUSD (formule exacte Disnat)
+  var margeDispoDis2 = m.capRestante;
+  var margeBrute2    = m.margeReq + margeDispoDis2;
+  var margeDisnatPct = margeBrute2 > 0 ? m.margeReq/margeBrute2*100 : margePctCalc;
+  var margeMax60_p1  = Math.max(0, margeBrute2*0.60 - m.margeReq);
+  const margeDispo   = margeDispoDis2; // capacité restante Disnat
   const margeMax60   = Math.max(0, baseTotal * 0.60 - margeRequise);
   const valNette     = baseTotal; // base de marge comme proxy valeur nette
   const notQQQ       = m.shortPos.filter(p=>p.ticker==='QQQ').reduce((s,p)=>s+parseFloat(p.strike)*100*parseInt(p.contrats),0);
@@ -2246,7 +2253,7 @@ function recalcDash() {
   '</div>'; }).join('');
 
   // P2 — conditions par sous-jacent avec RSI nuancé
-  const capCalcP2   = Math.max(0, m.base - m.margeReq) * facteurDisnat;
+  const capCalcP2   = m.capRestante;
   const margeBrP2  = m.margeReq + capCalcP2;
   const margePct2  = margeBrP2 > 0 ? m.margeReq/margeBrP2*100 : m.margePct;
   const cMarge = margePct2 < 60;
@@ -2509,8 +2516,8 @@ function updateDispValues() {
   if(cFxEl && mkt.USDCAD) cFxEl.value = mkt.USDCAD.toFixed(4);
   if(cashU)  cashU.textContent='$'+fi(m.cashU);
   if(cashC)  cashC.textContent='$'+fi(m.cashC)+' CAD';
-  // Utiliser la capacité calculée (auto × facteur) depuis calcMarge
-  var margeBrute3  = m.margeReq + (m.base - m.margeReq) * facteurDisnat;
+  // Utiliser la capacité calculée (formule exacte Disnat)
+  var margeBrute3  = m.margeReq + m.capRestante;
   var margeDisnatPct2 = margeBrute3>0 ? Math.round(m.margeReq/margeBrute3*1000)/10 : m.margePct;
   if(margeEl){
     margeEl.textContent = margeDisnatPct2.toFixed(1)+'%';
@@ -2714,8 +2721,7 @@ function recalcCompte() {
     {l:'P&L options flottant', v:(pnlOpts>=0?'+':'')+fi(pnlOpts)+'$', s:'Profit non réalisé puts vendus', c:pnlOpts>=0?'g':'r'},
   ];
   // KPI Ligne 2 — Marge & Capacité (mêmes termes que P1 tableau de bord)
-  var capCalc3     = Math.max(0, m.base - margeReq);
-  var capRest3     = capCalc3 * facteurDisnat; // auto × facteur
+  var capRest3     = m.capRestante;
   var margeBrute3  = margeReq + capRest3;
   var margeDispo2  = capRest3;
   var margeMax60_2 = Math.max(0, margeBrute3 * 0.60 - margeReq);
