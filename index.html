@@ -2187,8 +2187,8 @@ function recalcDash() {
   var _el_p1g=document.getElementById('p1g');
   if(_el_p1g) _el_p1g.innerHTML = [
     {l:'Marge utilisée',
-     v:'$'+fi(margeRequise)+' / $'+fi(Math.round(margeBrute2)),
-     s:margeDisnatPct.toFixed(1)+'% · bloquée/(bloquée+capacité) · cible < 60%',
+     v:margeDisnatPct.toFixed(1)+'%',
+     s:'$'+fi(margeRequise)+' / $'+fi(Math.round(margeBrute2))+' · bloquée/(bloquée+capacité) · cible < 60%',
      st:margeDisnatPct<40?'ok':margeDisnatPct<60?'wn':'dn',
      bar:margeDisnatPct,
      bc:margeDisnatPct<40?'var(--green)':margeDisnatPct<60?'var(--amber)':'var(--red)'},
