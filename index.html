@@ -805,12 +805,14 @@ async function yahooQuote(sym) {
   } catch(e) {}
 
   // Essai 2: Apps Script comme proxy (UrlFetchApp n'a pas de CORS)
-  // On réutilise getOptionPrice avec un symbole Yahoo formaté
-  try {
-    const yahooSym = sym.replace(/\./g,'%2E'); // VEQT.TO → VEQT%2ETO
-    const r = await gsApi({action:'getOptionPrice', occ: sym});
-    if(r && r.price && r.price > 0) return {c: r.price};
-  } catch(e) {}
+  // Uniquement pour les titres boursiers normaux — pas pour VIX, forex, indices
+  const isStandardTicker = /^[A-Z]{1,5}(\.[A-Z]{2})?$/.test(sym);
+  if (isStandardTicker) {
+    try {
+      const r = await gsApi({action:'getOptionPrice', occ: sym});
+      if(r && r.price && r.price > 0) return {c: r.price};
+    } catch(e) {}
+  }
 
   // Essai 3: proxies CORS publics
   const map = {'USDCAD=X':'CAD=X','VIX':'^VIX'};
@@ -1007,7 +1009,7 @@ async function actualiserTout() {
     if(q.c>0) mkt.QQQ=q.c;
     if(s.c>0) mkt.SPY=s.c;
     if(g.c>0) mkt.GLD=g.c;
-    if(v.c>0) mkt.VIX=v.c;
+    if(v.c>0 && v.c < 80) mkt.VIX=v.c;  // VIX réaliste entre 0 et 80
     if(n.c>0) mkt.NVDA=n.c;
     if(fxF.c>0) {
       mkt.USDCAD=fxF.c;
