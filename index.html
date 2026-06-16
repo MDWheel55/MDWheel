@@ -289,7 +289,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <div class="pos-toolbar">
     <button class="btn btn-p" onclick="openStkModal()">+ Nouvelle action</button>
     <button class="btn btn-g" onclick="syncSheets()">&#9729; Sync Sheets</button>
-    <button class="btn btn-d" onclick="importHistoriqueActions()" title="Importer les 18 transactions historiques 2026 depuis les relevés Disnat" style="font-size:10px">⬆ Import historique 2026</button>
     <div style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted)" id="stk-msg"></div>
   </div>
 
@@ -330,10 +329,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
       <thead><tr>
         <th>DATE</th><th>SYMBOLE</th><th>DEV</th><th>OPÉRATION</th>
         <th style="text-align:right">QTÉ</th><th style="text-align:right">PRIX</th>
-        <th style="text-align:right">MONTANT</th><th style="text-align:right">FRAIS</th>
-        <th style="text-align:right">P&L RÉALISÉ</th>
+        <th style="text-align:right">MONTANT</th>
       </tr></thead>
-      <tbody id="trades-act-body"><tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr></tbody>
+      <tbody id="trades-act-body"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -2763,28 +2761,24 @@ function renderTradesActions(rawTrades) {
   window._tradesActCache = trades;
   renderPnlActRealized();
   if (trades.length === 0) {
-    body.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr>';
     return;
   }
-  trades = trades.slice().reverse();
-  body.innerHTML = trades.map(function(t){
-    var op = t.operation || '';
-    var opCol = op === 'ACHAT' ? 'var(--red)' : 'var(--green)';
-    var opBg  = op === 'ACHAT' ? 'rgba(255,77,109,0.15)' : 'rgba(0,229,160,0.15)';
-    var pnl = parseFloat(t.pnl);
-    var hasPnl = !isNaN(pnl) && t.operation === 'VENTE';
-    var montant = parseFloat(t.montant)||0;
-    var frais = parseFloat(t.frais)||0;
+  const sorted = trades.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  body.innerHTML = sorted.map(function(t){
+    const op    = t.operation || '';
+    const opCol = op === 'ACHAT' ? 'var(--red)' : 'var(--green)';
+    const opBg  = op === 'ACHAT' ? 'rgba(255,77,109,0.15)' : 'rgba(0,229,160,0.15)';
+    const montant = parseFloat(t.montant)||0;
+    const tkCls = {QQQ:'var(--qqq)',SPY:'var(--spy)',GLD:'var(--gld)',NVDA:'var(--nvda)'}[t.symbole] || 'var(--fg)';
     return '<tr>'+
       '<td style="font-size:10px;color:var(--muted)">'+(t.date||'')+'</td>'+
-      '<td style="font-weight:600;font-family:var(--mono);color:var(--qqq)">'+(t.symbole||'')+'</td>'+
+      '<td style="font-weight:600;font-family:var(--mono);color:'+tkCls+'">'+(t.symbole||'')+'</td>'+
       '<td style="font-size:9px;color:var(--muted)">'+(t.devise||'')+'</td>'+
       '<td><span style="font-size:10px;padding:1px 6px;border-radius:2px;background:'+opBg+';color:'+opCol+'">'+op+'</span></td>'+
       '<td style="text-align:right;font-family:var(--mono)">'+(t.quantite||0)+'</td>'+
-      '<td style="text-align:right;font-family:var(--mono)">$'+f2(parseFloat(t.prix)||0)+'</td>'+
-      '<td style="text-align:right;font-family:var(--mono);color:'+(montant>=0?'var(--green)':'var(--red)')+'">'+(montant>=0?'+':'')+fi(montant)+'$</td>'+
-      '<td style="text-align:right;font-family:var(--mono);color:var(--muted)">'+(frais>0?'$'+f2(frais):'—')+'</td>'+
-      '<td style="text-align:right;font-family:var(--mono);color:'+(hasPnl?(pnl>=0?'var(--green)':'var(--red)'):'var(--muted)')+'">'+(hasPnl?((pnl>=0?'+':'')+fi(pnl)+'$'):'—')+'</td>'+
+      '<td style="text-align:right;font-family:var(--mono)">$'+f2(Math.abs(parseFloat(t.prix)||0))+'</td>'+
+      '<td style="text-align:right;font-family:var(--mono);color:'+(montant>=0?'var(--green)':'var(--red)')+'">'+(montant>=0?'+':'')+fi(Math.round(Math.abs(montant)))+'$</td>'+
     '</tr>';
   }).join('');
 }
@@ -2903,73 +2897,6 @@ function renderActionsTable() {
   // Stocker le P&L total actions pour les KPIs du compte
   window._pnlActionsUSD = totalPnlUSD;
   renderPnlActRealized();
-}
-
-// ── IMPORT HISTORIQUE ACTIONS 2026 ────────────────────────────────────────
-// 11 transactions minimales pour la vérité comptable 2026
-// 7 achats (coût moyen) + 4 ventes (P&L réalisé)
-// Les achats SPYM sans vente associée en 2026 sont exclus
-async function importHistoriqueActions() {
-  if (!confirm('Importer les 11 transactions historiques actions 2026?\n\n4 ventes avec P&L + 7 achats nécessaires au coût moyen\n(SCHB, QQQ, SPY, QQQM — relevés Disnat jan-mars 2026)\n\nSans impact sur le cash actuel.')) return;
-
-  const msg = document.getElementById('stk-msg');
-  if(msg) msg.textContent = 'Import en cours...';
-  setSyncStatus(false, 'Import historique...');
-
-  const trades = [
-    // ── Achats nécessaires au coût moyen des ventes ──
-    // QQQ & SPY → vendus le 25 fév
-    ["2026-01-14","ACHAT","QQQ", "Invesco QQQ Trust ETF",         2, 616.20,"USD"],
-    ["2026-01-14","ACHAT","SPY", "State Street SPDR S&P 500 ETF", 6, 688.28,"USD"],
-    ["2026-01-21","ACHAT","QQQ", "Invesco QQQ Trust ETF",         2, 615.67,"USD"],
-    ["2026-01-21","ACHAT","SPY", "State Street SPDR S&P 500 ETF", 2, 684.00,"USD"],
-    ["2026-02-06","ACHAT","QQQ", "Invesco QQQ Trust ETF",         4, 599.82,"USD"],
-    // SCHB → vendu le 9 mars
-    ["2026-02-25","ACHAT","SCHB","Schwab US Broad Market ETF",  205,  26.75,"USD"],
-    // QQQM → vendu le 27 mars
-    ["2026-02-06","ACHAT","QQQM","Invesco Nasdaq 100 ETF",       20, 253.69,"USD"],
-
-    // ── 4 ventes avec P&L réalisé ──
-    ["2026-02-25","VENTE","QQQ", "Invesco QQQ Trust ETF",         8, 616.20,"USD"], // P&L +67$
-    ["2026-02-25","VENTE","SPY", "State Street SPDR S&P 500 ETF", 8, 693.00,"USD"], // P&L +46$
-    ["2026-03-09","VENTE","SCHB","Schwab US Broad Market ETF",  205,  25.81,"USD"], // P&L -193$
-    ["2026-03-27","VENTE","QQQM","Invesco Nasdaq 100 ETF",       30, 233.51,"USD"], // P&L -538$
-  ];
-
-  let ok = 0, err = 0;
-  for (const [date, op, sym, nom, qty, px, dev] of trades) {
-    try {
-      const montant = Math.round(qty * px * 100) / 100;
-      const tradeId = 'TA-HIST-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
-      await gsApi({
-        action:    'saveTradeAction',
-        tradeId,
-        date,
-        symbole:   sym,
-        nom,
-        devise:    dev,
-        operation: op,
-        quantite:  qty,
-        prix:      f2(px),
-        montant:   f2(op==='VENTE' ? montant : -montant),
-        frais:     '0',
-        pnl:       0,
-      });
-      ok++;
-      if(msg) msg.textContent = `Import: ${ok}/${trades.length}...`;
-    } catch(e) { err++; }
-  }
-
-  const ta = await gsApi({action:'getTradesActions'});
-  if (ta && typeof renderTradesActions === 'function') renderTradesActions(ta);
-
-  setSyncStatus(true, `✓ Import terminé: ${ok} trades, ${err} erreurs`);
-  if(msg) setTimeout(()=>{ if(msg) msg.textContent=''; }, 4000);
-
-  if (ok > 0) {
-    const btn = document.querySelector('button[onclick="importHistoriqueActions()"]');
-    if (btn) btn.style.display = 'none';
-  }
 }
 
 // ── P&L RÉALISÉ ACTIONS ────────────────────────────────────────────────────
