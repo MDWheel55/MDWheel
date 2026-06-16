@@ -1653,10 +1653,16 @@ function renderPnlRealized() {
   ouvertures.forEach(t => {
     const k = periodKey(t.date); if (!k) return;
     periods[k] = periods[k] || blank();
-    const montant = Math.round(parseFloat(t.prix) * 100 * Math.abs(parseInt(t.contrats)||1));
-    if (t.action === 'STO') {
+    const prix = parseFloat(t.prix) || 0;
+    const qty  = Math.abs(parseInt(t.contrats)||1);
+    // Sanity check: prix unitaire d'une option entre 0 et 1000$
+    // Si > 1000, c'est probablement le montant brut mal placé dans la colonne Prix
+    if (t.action === 'STO' && prix > 0 && prix <= 1000) {
+      const montant = Math.round(prix * 100 * qty);
       periods[k].primesOpt += montant;
       periods[k].frais += (parseFloat(t.frais)||0);
+    } else if (t.action === 'STO' && prix > 1000) {
+      console.warn('Prime aberrante ignorée:', t.ticker, t.strike, t.date, 'prix=', prix);
     }
     // BTO ignoré des primes — son P&L apparaît dans P&L Réalisé au moment du STC
   });
