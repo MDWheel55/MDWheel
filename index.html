@@ -1647,15 +1647,18 @@ function renderPnlRealized() {
   const periods = {};
   const blank = () => ({primesOpt:0, pnlOpt:0, frais:0});
 
-  // Primes encaissées nettes = STO (entrées) − BTO (sorties) par période
+  // Primes encaissées = STO uniquement (entrées de cash)
+  // BTO = achat de protection/LEAPS → coût d'investissement, pas une prime
+  // Le P&L des BTO est capturé au STC (fermeture)
   ouvertures.forEach(t => {
     const k = periodKey(t.date); if (!k) return;
     periods[k] = periods[k] || blank();
     const montant = Math.round(parseFloat(t.prix) * 100 * Math.abs(parseInt(t.contrats)||1));
-    // STO = prime encaissée (+), BTO = prime déboursée (−)
-    if (t.action === 'STO') periods[k].primesOpt += montant;
-    else                    periods[k].primesOpt -= montant;
-    periods[k].frais += (parseFloat(t.frais)||0);
+    if (t.action === 'STO') {
+      periods[k].primesOpt += montant;
+      periods[k].frais += (parseFloat(t.frais)||0);
+    }
+    // BTO ignoré des primes — son P&L apparaît dans P&L Réalisé au moment du STC
   });
 
   // P&L réalisé calculé à partir des fermetures
