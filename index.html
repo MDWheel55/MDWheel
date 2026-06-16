@@ -1010,24 +1010,39 @@ async function actualiserTout() {
       const fxInp=document.getElementById('c-fx'); if(fxInp) fxInp.value=fxF.c.toFixed(4);
       const fxDash=document.getElementById('m-cashcad-fx');
       if(fxDash) fxDash.textContent='1 USD = '+fxF.c.toFixed(4)+' CAD';
+      saveField('TauxFX', fxF.c.toFixed(4));
     } else {
-      // Finnhub ne fournit pas le forex en plan gratuit — fallback via Apps Script (Yahoo proxy côté serveur)
-      try {
-        const fxProxy = await gsApi({action:'getOptionPrice', occ:'CADUSD=X'});
-        // Apps Script peut aussi appeler Yahoo pour le taux de change
-        // Alternative : chercher dans un endpoint public
-        const r = await fetch('https://cdn.jsdelivr.net/gh/fawazahmed0/currency-api@1/latest/currencies/usd/cad.min.json', {cache:'no-store'});
-        if(r.ok) {
+      // Finnhub ne fournit pas le forex en plan gratuit
+      // Fallback 1 : Yahoo Finance via yahooQuote (même fonction que les autres titres)
+      // CAD=X sur Yahoo = valeur de 1 USD en CAD
+      const fxSources = [
+        async () => {
+          const r = await yahooQuote('CAD=X');
+          if(r && r.c > 1.2 && r.c < 1.6) return r.c;
+          return 0;
+        },
+        async () => {
+          // Fallback 2 : frankfurter.app (BCE, sans CORS)
+          const r = await fetch('https://api.frankfurter.app/latest?from=USD&to=CAD', {cache:'no-store'});
+          if(!r.ok) return 0;
           const d = await r.json();
-          const rate = parseFloat(d.cad);
-          if(rate > 1.2 && rate < 1.6) {
+          const rate = parseFloat(d?.rates?.CAD);
+          return (rate > 1.2 && rate < 1.6) ? rate : 0;
+        },
+      ];
+      for(const src of fxSources) {
+        try {
+          const rate = await src();
+          if(rate > 0) {
             mkt.USDCAD = rate;
             const fxInp=document.getElementById('c-fx'); if(fxInp) fxInp.value=rate.toFixed(4);
             const fxDash=document.getElementById('m-cashcad-fx');
             if(fxDash) fxDash.textContent='1 USD = '+rate.toFixed(4)+' CAD';
+            saveField('TauxFX', rate.toFixed(4));
+            break;
           }
-        }
-      } catch(e) {}
+        } catch(e) {}
+      }
     }
     // TSX + NYSE non-Finnhub via Yahoo
     const [veqtY,xegY,ibitY,spymY,ubilY] = await Promise.allSettled([
@@ -2908,33 +2923,65 @@ function renderPnlActRealized() {
 
   // Trades actions depuis tradesActCache (chargé avec getTradesActions)
   const trades = (window._tradesActCache || []);
-  const achats  = trades.filter(t => t.operation === 'ACHAT');
-  const ventes  = trades.filter(t => t.operation === 'VENTE');
+  const achats  = trades.filter(t => (t.operation||'').toUpperCase() === 'ACHAT');
+  const ventes  = trades.filter(t => (t.operation||'').toUpperCase() === 'VENTE');
 
-  // Registre des coûts moyens par symbole (FIFO simplifié)
+  // Registre des coûts moyens pondérés par symbole
+  // On construit le coût moyen en traitant les trades dans l'ordre chronologique
   const costBook = {};
-  achats.forEach(t => {
+  const tradesSorted = [...trades].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  tradesSorted.forEach(t => {
+    const op  = (t.operation||'').toUpperCase();
     const sym = t.symbole;
-    const qty = parseFloat(t.quantite)||0;
-    const px  = parseFloat(t.prix)||0;
-    costBook[sym] = costBook[sym] || {totalCost:0, totalQty:0};
-    costBook[sym].totalCost += px * qty;
-    costBook[sym].totalQty  += qty;
+    const qty = Math.abs(parseFloat(t.quantite)||0);
+    const px  = Math.abs(parseFloat(t.prix)||0);
+    if (!costBook[sym]) costBook[sym] = {totalCost:0, totalQty:0};
+    if (op === 'ACHAT') {
+      costBook[sym].totalCost += px * qty;
+      costBook[sym].totalQty  += qty;
+    } else if (op === 'VENTE') {
+      // Réduire la position (coût moyen inchangé sur les unités restantes)
+      const nb = Math.min(qty, costBook[sym].totalQty);
+      const coutMoy = costBook[sym].totalQty > 0 ? costBook[sym].totalCost / costBook[sym].totalQty : 0;
+      costBook[sym].totalCost -= coutMoy * nb;
+      costBook[sym].totalQty  -= nb;
+    }
+  });
+
+  // P&L d'une vente = (prix_vente − coût_moyen_au_moment_vente) × quantité
+  // On recalcule avec le coût moyen reconstruit proprement
+  const costAtVente = {};
+  const costBookV = {}; // reconstruction pour les ventes dans l'ordre
+  tradesSorted.forEach(t => {
+    const op  = (t.operation||'').toUpperCase();
+    const sym = t.symbole;
+    const qty = Math.abs(parseFloat(t.quantite)||0);
+    const px  = Math.abs(parseFloat(t.prix)||0);
+    if (!costBookV[sym]) costBookV[sym] = {totalCost:0, totalQty:0};
+    if (op === 'ACHAT') {
+      costBookV[sym].totalCost += px * qty;
+      costBookV[sym].totalQty  += qty;
+    } else if (op === 'VENTE') {
+      const coutMoy = costBookV[sym].totalQty > 0 ? costBookV[sym].totalCost / costBookV[sym].totalQty : 0;
+      costAtVente[t.tradeId || (sym+t.date)] = coutMoy;
+      const nb = Math.min(qty, costBookV[sym].totalQty);
+      costBookV[sym].totalCost -= coutMoy * nb;
+      costBookV[sym].totalQty  -= nb;
+    }
   });
 
   function pnlVente(t) {
-    const sym = t.symbole;
-    const qty = parseFloat(t.quantite)||0;
-    const px  = parseFloat(t.prix)||0;
-    const book = costBook[sym];
-    const coutMoy = book && book.totalQty > 0 ? book.totalCost / book.totalQty : 0;
-    return Math.round((px - coutMoy) * qty);
+    const qty     = Math.abs(parseFloat(t.quantite)||0);
+    const pxVente = Math.abs(parseFloat(t.prix)||0);
+    const frais   = Math.abs(parseFloat(t.frais)||0);
+    const coutMoy = costAtVente[t.tradeId || (t.symbole+t.date)] || 0;
+    return Math.round((pxVente - coutMoy) * qty - frais);
   }
 
-  const empty = () => '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune transaction enregistrée</td></tr>';
+  const empty = () => '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune vente enregistrée — le P&L se réalise à la vente d\'actions</td></tr>';
 
   if (pnlActView === 'position') {
-    head.innerHTML = '<tr><th>DATE</th><th>SYMBOLE</th><th>OPÉRATION</th><th style="text-align:right">QTÉ</th><th style="text-align:right">P&L RÉALISÉ</th></tr>';
+    head.innerHTML = '<tr><th>DATE</th><th>SYMBOLE</th><th style="text-align:right">QTÉ VENDUE</th><th style="text-align:right">P&L RÉALISÉ</th></tr>';
     if (!ventes.length) { body.innerHTML = empty(); foot.innerHTML=''; return; }
     let tot = 0;
     const sorted = [...ventes].sort((a,b)=>b.date.localeCompare(a.date));
@@ -2945,58 +2992,60 @@ function renderPnlActRealized() {
       return `<tr>
         <td style="font-size:10px;color:var(--muted)">${t.date}</td>
         <td style="font-weight:600;font-family:var(--mono)">${t.symbole}</td>
-        <td style="font-size:10px">Vente</td>
-        <td style="text-align:right;font-family:var(--mono)">${fi(parseFloat(t.quantite))}</td>
+        <td style="text-align:right;font-family:var(--mono)">${fi(Math.abs(parseFloat(t.quantite)))}</td>
         <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${pnl>=0?'+':''}${fi(pnl)}$</td>
       </tr>`;
     }).join('');
     foot.innerHTML = `<tr style="border-top:2px solid var(--border)">
-      <td colspan="4" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL P&L RÉALISÉ</td>
+      <td colspan="3" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL P&L RÉALISÉ</td>
       <td style="text-align:right;font-weight:700;color:${tot>=0?'var(--green)':'var(--red)'}">${tot>=0?'+':''}${fi(tot)}$</td>
     </tr>`;
     return;
   }
 
-  // Vues par période
+  // Vues par période — P&L déclenché uniquement aux ventes
   const periodKey = d => pnlActView==='annee'?(d||'').slice(0,4):(d||'').slice(0,7);
   const periods = {};
-  const blank = ()=>({montants:0, pnl:0, frais:0});
+  const blank = ()=>({achats:0, ventes:0, pnl:0, frais:0, nbVentes:0});
 
   achats.forEach(t => {
     const k = periodKey(t.date); if(!k) return;
     periods[k] = periods[k]||blank();
-    periods[k].montants -= Math.abs(parseFloat(t.montant)||0);
-    periods[k].frais += parseFloat(t.frais)||0;
+    periods[k].achats += Math.abs(parseFloat(t.montant)||0);
+    periods[k].frais  += Math.abs(parseFloat(t.frais)||0);
   });
   ventes.forEach(t => {
     const k = periodKey(t.date); if(!k) return;
     periods[k] = periods[k]||blank();
-    periods[k].montants += Math.abs(parseFloat(t.montant)||0);
-    periods[k].pnl += pnlVente(t);
-    periods[k].frais += parseFloat(t.frais)||0;
+    periods[k].ventes   += Math.abs(parseFloat(t.montant)||0);
+    periods[k].pnl      += pnlVente(t);
+    periods[k].frais    += Math.abs(parseFloat(t.frais)||0);
+    periods[k].nbVentes++;
   });
 
   const keys = Object.keys(periods).sort().reverse();
   head.innerHTML = '<tr><th>PÉRIODE</th><th style="text-align:right">ACHATS</th><th style="text-align:right">VENTES</th><th style="text-align:right">FRAIS</th><th style="text-align:right">P&L RÉALISÉ</th></tr>';
-  if (!keys.length) { body.innerHTML = empty(); foot.innerHTML=''; return; }
+  if (!keys.length) { body.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune transaction</td></tr>`; foot.innerHTML=''; return; }
 
-  let tMont=0, tPnl=0, tFrais=0;
+  let tAchats=0, tVentes=0, tPnl=0, tFrais=0;
   body.innerHTML = keys.map(k => {
     const p = periods[k];
-    tMont  += p.montants; tPnl += p.pnl; tFrais += p.frais;
-    const col = p.pnl>=0?'var(--green)':'var(--red)';
-    const sgn = v => (v>=0?'+':'')+fi(v)+'$';
+    tAchats += p.achats; tVentes += p.ventes; tPnl += p.pnl; tFrais += p.frais;
+    const col = p.nbVentes===0 ? 'var(--muted)' : p.pnl>=0?'var(--green)':'var(--red)';
+    const pnlStr = p.nbVentes===0 ? '—' : (p.pnl>=0?'+':'')+fi(p.pnl)+'$';
     return `<tr>
       <td style="font-weight:600">${k}</td>
-      <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.montants<0?fi(Math.abs(p.montants))+'$':'—'}</td>
-      <td style="text-align:right;font-family:var(--mono);color:var(--green)">${p.montants>0?'+'+fi(p.montants)+'$':'—'}</td>
+      <td style="text-align:right;font-family:var(--mono);color:var(--red)">${p.achats?'-'+fi(p.achats)+'$':'—'}</td>
+      <td style="text-align:right;font-family:var(--mono);color:var(--green)">${p.ventes?'+'+fi(p.ventes)+'$':'—'}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.frais?'$'+fi(p.frais):'—'}</td>
-      <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${sgn(p.pnl)}</td>
+      <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${pnlStr}</td>
     </tr>`;
   }).join('');
   foot.innerHTML = `<tr style="border-top:2px solid var(--border)">
     <td style="padding:8px;font-weight:600">TOTAL</td>
-    <td colspan="3"></td>
+    <td style="text-align:right;font-family:var(--mono);color:var(--red)">${tAchats?'-'+fi(tAchats)+'$':'—'}</td>
+    <td style="text-align:right;font-family:var(--mono);color:var(--green)">${tVentes?'+'+fi(tVentes)+'$':'—'}</td>
+    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${tFrais?'$'+fi(tFrais):'—'}</td>
     <td style="text-align:right;font-weight:700;font-family:var(--mono);color:${tPnl>=0?'var(--green)':'var(--red)'}">${tPnl>=0?'+':''}${fi(tPnl)}$</td>
   </tr>`;
 }
