@@ -395,7 +395,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 
   <div class="sec" style="display:flex;align-items:center;justify-content:space-between">
     <span>JOURNAL DE TRÉSORERIE</span>
-    <div style="display:flex;gap:6px">
+    <div style="display:flex;gap:6px;align-items:center">
+      <select id="flux-annee" class="modal-inp" style="padding:3px 8px;font-size:10px;height:26px;width:80px" onchange="renderFlux()">
+        <option value="tout">Tout</option>
+        <option value="2025">2025</option>
+        <option value="2026" selected>2026</option>
+      </select>
       <button class="btn btn-d" id="flux-v-tout"   style="padding:3px 10px;font-size:10px" onclick="setFluxView('tout')">Tout</button>
       <button class="btn btn-d" id="flux-v-depot"  style="padding:3px 10px;font-size:10px" onclick="setFluxView('Dépôt')">Dépôts</button>
       <button class="btn btn-d" id="flux-v-div"    style="padding:3px 10px;font-size:10px" onclick="setFluxView('Dividende')">Dividendes</button>
@@ -2898,58 +2903,65 @@ function renderFlux() {
   const kpis  = document.getElementById('flux-kpis');
   if (!body) return;
 
-  const data = fluxView === 'tout' ? fluxData
-             : fluxData.filter(f => f.type === fluxView);
+  // Filtre année
+  const annee = document.getElementById('flux-annee')?.value || 'tout';
+
+  // Filtre type + année pour le tableau
+  let data = fluxView === 'tout' ? [...fluxData]
+           : fluxData.filter(f => f.type === fluxView);
+  if (annee !== 'tout') data = data.filter(f => (f.date||'').startsWith(annee));
   const sorted = [...data].sort((a,b) => b.date.localeCompare(a.date));
 
-  // KPIs globaux (toujours sur tout)
-  const depots   = fluxData.filter(f=>f.type==='Dépôt').reduce((s,f)=>s+(f.devise==='CAD'?f.montant:f.montant*(mkt.USDCAD||1.397)),0);
-  const divUSD   = fluxData.filter(f=>f.type==='Dividende'&&f.devise==='USD').reduce((s,f)=>s+f.montant,0);
-  const divCAD   = fluxData.filter(f=>f.type==='Dividende'&&f.devise==='CAD').reduce((s,f)=>s+f.montant,0);
-  const retenues = fluxData.filter(f=>f.type==='Retenue').reduce((s,f)=>s+f.montant,0);
-  const divNet   = divUSD + retenues + divCAD/(mkt.USDCAD||1.397);
+  // ── KPIs filtrés par année ───────────────────────────────────────────
+  const kpiData = annee === 'tout' ? fluxData : fluxData.filter(f=>(f.date||'').startsWith(annee));
+  const fx      = mkt.USDCAD || parseFloat(gv('c-fx','1.397'));
+
+  const depots  = kpiData.filter(f=>f.type==='Dépôt').reduce((s,f)=>s+(f.devise==='CAD'?f.montant:f.montant*fx),0);
+  const divUSD  = kpiData.filter(f=>f.type==='Dividende'&&f.devise==='USD').reduce((s,f)=>s+f.montant,0);
+  const divCAD  = kpiData.filter(f=>f.type==='Dividende'&&f.devise==='CAD').reduce((s,f)=>s+f.montant,0);
+  const retenues= kpiData.filter(f=>f.type==='Retenue').reduce((s,f)=>s+f.montant,0);
+  const divNet  = divUSD + retenues + divCAD/fx;
+  const label   = annee === 'tout' ? 'Depuis l\'ouverture' : 'Année '+annee;
 
   if (kpis) kpis.innerHTML = [
-    {l:'Dépôts totaux (CAD)',   v:'$'+fi(Math.round(depots))+' CAD',      s:'Depuis l\'ouverture du compte',          c:'g'},
-    {l:'Dividendes bruts (USD)',v:'$'+f2(divUSD)+' USD',                  s:'Dividendes reçus en USD cumulés',        c:'g'},
-    {l:'Dividendes bruts (CAD)',v:'$'+f2(divCAD)+' CAD',                  s:'Dividendes reçus en CAD cumulés',        c:'g'},
-    {l:'Retenues d\'impôt',    v:fi(retenues.toFixed(2))+' USD',          s:'Retenues à la source (non récupérables)',c:'a'},
-    {l:'Dividendes nets (USD)', v:'$'+f2(divNet.toFixed(2))+' USD equiv',  s:'Bruts − retenues, tout en USD',          c:'g'},
-  ].map(k => `<div class="kpi-card kpi-${k.c}">
-    <div class="kpi-label">${k.l}</div>
-    <div class="kpi-value kpi-${k.c}">${k.v}</div>
-    <div class="kpi-sub">${k.s}</div>
-  </div>`).join('');
+    {l:'DÉPÔTS (CAD)',          v:'$'+fi(Math.round(depots)),       s:label,                                    c:'g'},
+    {l:'DIVIDENDES BRUTS (USD)',v:'$'+f2(divUSD)+' USD',            s:'Dividendes reçus en USD',               c:'g'},
+    {l:'DIVIDENDES BRUTS (CAD)',v:'$'+f2(divCAD)+' CAD',            s:'Dividendes reçus en CAD',               c:'g'},
+    {l:'RETENUES D\'IMPÔT',     v:(retenues<0?'':'-')+'$'+f2(Math.abs(retenues))+' USD', s:'Retenues à la source', c:'a'},
+    {l:'DIVIDENDES NETS (USD)', v:'$'+f2(Math.max(0,divNet))+' USD', s:'Bruts − retenues, tout en USD',        c:'g'},
+  ].map(k=>`<div class="kpi"><div class="kpi-l">${k.l}</div><div class="kpi-v ${k.c}">${k.v}</div><div class="kpi-s">${k.s}</div></div>`).join('');
 
+  // ── Tableau ───────────────────────────────────────────────────────────
   const typeCol = {
-    'Dépôt':'var(--green)', 'Transfert':'var(--cyan,#4ec9b0)',
-    'Conversion':'var(--amber)', 'Dividende':'var(--green)',
-    'Intérêts':'var(--green)', 'Retenue':'var(--red)', 'Retrait':'var(--red)',
+    'Dépôt':'var(--green)','Transfert':'#4ec9b0',
+    'Conversion':'var(--amber)','Dividende':'var(--green)',
+    'Intérêts':'var(--green)','Retenue':'var(--red)','Retrait':'var(--red)',
   };
 
-  body.innerHTML = sorted.map(f => {
-    const col = typeCol[f.type] || 'var(--fg)';
-    const sgn = f.montant >= 0 ? '+' : '';
-    return `<tr>
-      <td style="font-size:10px;color:var(--muted)">${f.date}</td>
-      <td><span style="font-size:10px;font-weight:600;color:${col};background:${col}22;padding:2px 7px;border-radius:3px">${f.type}</span></td>
-      <td style="font-size:10px;color:var(--muted)">${f.devise}</td>
-      <td style="font-family:var(--mono);color:${f.montant>=0?'var(--green)':'var(--red)'};font-weight:600">${sgn}${f2(Math.abs(f.montant))}$</td>
-      <td style="font-size:11px">${f.desc}</td>
-      <td style="font-size:10px;color:var(--muted)">${f.compte||'—'}</td>
-      <td><button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px" onclick="deleteFlux('${f.id}')">✕</button></td>
-    </tr>`;
-  }).join('');
+  body.innerHTML = sorted.length === 0
+    ? `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem">Aucun flux pour ${annee==='tout'?'cette période':'l\'année '+annee}</td></tr>`
+    : sorted.map(f => {
+        const col = typeCol[f.type]||'var(--fg)';
+        const sgn = f.montant>=0?'+':'';
+        return `<tr>
+          <td style="font-size:10px;color:var(--muted)">${f.date}</td>
+          <td><span style="font-size:10px;font-weight:600;color:${col};background:${col}22;padding:2px 7px;border-radius:3px">${f.type}</span></td>
+          <td style="font-size:10px;color:var(--muted)">${f.devise}</td>
+          <td style="font-family:var(--mono);color:${f.montant>=0?'var(--green)':'var(--red)'};font-weight:600">${sgn}${f2(Math.abs(f.montant))}$</td>
+          <td style="font-size:11px">${f.desc}</td>
+          <td style="font-size:10px;color:var(--muted)">${f.compte||'—'}</td>
+          <td><button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px" onclick="deleteFlux('${f.id}')">✕</button></td>
+        </tr>`;
+      }).join('');
 
-  // Totaux par devise
+  // Totaux par devise (période filtrée)
   const totCAD = data.filter(f=>f.devise==='CAD').reduce((s,f)=>s+f.montant,0);
   const totUSD = data.filter(f=>f.devise==='USD').reduce((s,f)=>s+f.montant,0);
-  const sgnC = totCAD>=0?'+':'', sgnU = totUSD>=0?'+':'';
   foot.innerHTML = `<tr style="border-top:2px solid var(--border)">
-    <td colspan="3" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL AFFICHÉ</td>
-    <td style="font-family:var(--mono);font-weight:600;color:var(--green)">
-      ${sgnC}${f2(Math.abs(totCAD))}$ CAD<br>
-      <span style="color:var(--green)">${sgnU}${f2(Math.abs(totUSD))}$ USD</span>
+    <td colspan="3" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL ${annee==='tout'?'':'('+annee+')'}</td>
+    <td style="font-family:var(--mono);font-weight:600">
+      <span style="color:var(--green)">${totCAD>=0?'+':''}${f2(Math.abs(totCAD))}$ CAD</span><br>
+      <span style="color:var(--green)">${totUSD>=0?'+':''}${f2(Math.abs(totUSD))}$ USD</span>
     </td>
     <td colspan="3"></td>
   </tr>`;
