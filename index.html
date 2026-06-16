@@ -537,7 +537,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 <script>
 // ═══ CONFIG ═══
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx076ydkLQueVhhFPSK5qluuJgR_honxxQZqXHQj1jN5GfyOuw_IvMURX5Mgg-qcgTl/exec';
-const FH_KEY = 'd8ldafhr01qtamgu6fggd8ldafhr01qtamgu6fh0';
+const FH_KEY = 'd8jim29r01qh6g3qjt00d8jim29r01qh6g3qjt0g';
 const FH_BASE = 'https://finnhub.io/api/v1';
 
 // ═══ HELPERS ═══
@@ -795,44 +795,49 @@ async function yahooQuote(sym) {
   // Essai 1: serveur local Python (aucun CORS)
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(()=>ctrl.abort(), 5000);
+    const t = setTimeout(()=>ctrl.abort(), 3000);
     const r = await fetch('/api/quote?sym='+encodeURIComponent(sym), {cache:'no-store',signal:ctrl.signal});
     clearTimeout(t);
     if(r.ok) {
       const d = await r.json();
-      if(d.price && d.price > 0) {
-        return {c: d.price}; // ARRÊT ICI
-      }
+      if(d.price && d.price > 0) return {c: d.price};
     }
   } catch(e) {}
 
-  // Essai 2: proxies CORS (si serveur local non disponible)
+  // Essai 2: Apps Script comme proxy (UrlFetchApp n'a pas de CORS)
+  // On réutilise getOptionPrice avec un symbole Yahoo formaté
+  try {
+    const yahooSym = sym.replace(/\./g,'%2E'); // VEQT.TO → VEQT%2ETO
+    const r = await gsApi({action:'getOptionPrice', occ: sym});
+    if(r && r.price && r.price > 0) return {c: r.price};
+  } catch(e) {}
+
+  // Essai 3: proxies CORS publics
   const map = {'USDCAD=X':'CAD=X','VIX':'^VIX'};
   const ySym = map[sym] || sym;
-  const url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + ySym + '?interval=1d&range=1d';
+  const url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(ySym) + '?interval=1d&range=1d';
   const proxies = [
-    {url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(url), key: 'contents'},
-    {url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url), key: 'direct'},
-    {url: 'https://corsproxy.io/?' + encodeURIComponent(url), key: 'direct'},
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+    'https://api.allorigins.win/get?url=' + encodeURIComponent(url),
+    'https://thingproxy.freeboard.io/fetch/' + url,
   ];
-  for(const proxy of proxies) {
+  for(const proxyUrl of proxies) {
     try {
       const ctrl = new AbortController();
-      const t = setTimeout(()=>ctrl.abort(), 6000);
-      const r = await fetch(proxy.url, {cache:'no-store', signal:ctrl.signal});
+      const t = setTimeout(()=>ctrl.abort(), 5000);
+      const r = await fetch(proxyUrl, {cache:'no-store', signal:ctrl.signal});
       clearTimeout(t);
       if(!r.ok) continue;
-      let content;
-      if(proxy.key==='contents') {
-        const d = await r.json();
-        if(!d||!d.contents) continue;
-        content = d.contents;
-      } else {
-        content = await r.text();
+      let text = await r.text();
+      // allorigins/get retourne {contents: "..."}
+      if(text.includes('"contents"')) {
+        const wrapper = JSON.parse(text);
+        text = wrapper.contents || text;
       }
-      if(typeof content!=='string'||content.trim()[0]!=='{') continue;
-      const parsed = JSON.parse(content);
-      const meta = parsed.chart.result[0].meta;
+      if(typeof text!=='string'||!text.trim().startsWith('{')) continue;
+      const parsed = JSON.parse(text);
+      const meta = parsed?.chart?.result?.[0]?.meta;
+      if(!meta) continue;
       const px = parseFloat(meta.regularMarketPrice||meta.previousClose||0);
       if(px>0) return {c:px, h:meta.regularMarketDayHigh||px, l:meta.regularMarketDayLow||px};
     } catch(e) {}
