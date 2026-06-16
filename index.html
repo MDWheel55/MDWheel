@@ -173,6 +173,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <button class="nav-tab" onclick="showTab('options',this)">Options</button>
   <button class="nav-tab" onclick="showTab('actions',this)">Actions</button>
   <button class="nav-tab" onclick="showTab('compte',this)">Compte</button>
+  <button class="nav-tab" onclick="showTab('tresorerie',this)">Trésorerie</button>
   <div class="nav-right">
     <span class="sync-dot" id="sync-dot"></span>
     <span class="sync-status" id="sync-status">—</span>
@@ -389,7 +390,73 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 </div>
 
 
-<!-- MODAL -->
+<!-- PANEL TRÉSORERIE -->
+<div class="panel" id="tab-tresorerie">
+
+  <div class="sec" style="display:flex;align-items:center;justify-content:space-between">
+    <span>JOURNAL DE TRÉSORERIE</span>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-d" id="flux-v-tout"   style="padding:3px 10px;font-size:10px" onclick="setFluxView('tout')">Tout</button>
+      <button class="btn btn-d" id="flux-v-depot"  style="padding:3px 10px;font-size:10px" onclick="setFluxView('Dépôt')">Dépôts</button>
+      <button class="btn btn-d" id="flux-v-div"    style="padding:3px 10px;font-size:10px" onclick="setFluxView('Dividende')">Dividendes</button>
+      <button class="btn btn-p" style="padding:3px 10px;font-size:10px" onclick="openFluxModal()">+ Ajouter</button>
+    </div>
+  </div>
+
+  <!-- Résumé KPI -->
+  <div class="kpi-grid" id="flux-kpis" style="margin-bottom:12px"></div>
+
+  <!-- Tableau -->
+  <div style="overflow-x:auto">
+    <table class="ptbl" id="flux-table">
+      <thead id="flux-head">
+        <tr>
+          <th>DATE</th><th>TYPE</th><th>DEVISE</th><th>MONTANT</th><th>DESCRIPTION</th><th>COMPTE</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="flux-body"></tbody>
+      <tfoot id="flux-foot"></tfoot>
+    </table>
+  </div>
+
+</div>
+
+<!-- MODAL FLUX -->
+<div class="modal-bg" id="flux-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-title">Nouveau flux de trésorerie</div>
+    <div class="modal-fields">
+      <label class="modal-label">Date</label>
+      <input class="modal-inp" id="fm-date" type="date">
+      <label class="modal-label">Type</label>
+      <select class="modal-inp" id="fm-type" onchange="onFluxTypeChange()">
+        <option>Dépôt</option><option>Retrait</option><option>Dividende</option>
+        <option>Intérêts</option><option>Conversion</option><option>Retenue</option><option>Transfert</option>
+      </select>
+      <label class="modal-label">Devise</label>
+      <select class="modal-inp" id="fm-devise" onchange="onFluxTypeChange()">
+        <option value="CAD">CAD</option><option value="USD">USD</option>
+      </select>
+      <label class="modal-label" id="fm-montant-label">Montant (+ entrant, − sortant)</label>
+      <input class="modal-inp" id="fm-montant" type="number" step="0.01" placeholder="ex: 240000 ou -5.30">
+      <div id="fm-conversion-hint" style="display:none;font-size:10px;color:var(--amber);margin-top:4px;padding:4px 6px;background:var(--amber-bg,#2a2000);border-radius:3px">
+        La devise choisie = ce qui ENTRE dans ton compte. L'app calcule automatiquement l'équivalent sortant dans l'autre devise au taux live.
+      </div>
+      <label class="modal-label">Description</label>
+      <input class="modal-inp" id="fm-desc" type="text" placeholder="ex: DEPOT SIPC - CP90104">
+      <label class="modal-label">Compte</label>
+      <select class="modal-inp" id="fm-compte">
+        <option value="1BD21L0">1BD21L0 (CAD)</option>
+        <option value="1BD21M8">1BD21M8 (USD)</option>
+        <option value="">Les deux</option>
+      </select>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-d" onclick="closeFluxModal()">Annuler</button>
+      <button class="btn btn-p" onclick="saveFlux()">Enregistrer</button>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="modal">
   <div class="modal">
     <div class="modal-title">
@@ -678,12 +745,15 @@ async function loadAll() {
       const label = d.toLocaleDateString('fr-CA',{weekday:'short',month:'short',day:'numeric'})+' '+d.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'});
       setSyncStatus(true, 'Dernière actu: '+label);
     }
+    // Charger les flux de trésorerie si sauvegardés dans Sheets
+    await loadFluxFromSheets(cpt);
   }
   if (trades) renderTrades(trades);
   setSyncStatus(true, '✓ Synchronisé');
   renderPositions();
   renderStocks();
   recalcDash();
+  renderFlux();
 }
 
 async function syncSheets() {
@@ -2788,6 +2858,202 @@ function renderActionsTable() {
 }
 
 // ═══ RECALC COMPTE ═══
+// ══════════════════════════════════════════════════════════════════
+//  TRÉSORERIE — Journal des flux non-transactionnels
+// ══════════════════════════════════════════════════════════════════
+
+// Données initiales chargées depuis les relevés Disnat (nov 2025 → mai 2026)
+let fluxData = [
+  {id:'F001', date:'2025-11-12', type:'Dépôt',      devise:'CAD', montant:  35000.00, desc:'DEPOT SIPC - CP90104',                      compte:'1BD21L0'},
+  {id:'F002', date:'2025-11-12', type:'Transfert',  devise:'USD', montant:  93922.05, desc:'Transfert de 5DJ1WM0 (ancien compte)',        compte:'1BD21M8'},
+  {id:'F003', date:'2025-11-13', type:'Conversion', devise:'USD', montant:  24656.57, desc:'CONV. 1BD21L0 @ 1.4195 (35 000 CAD → USD)',   compte:'1BD21M8'},
+  {id:'F004', date:'2025-11-24', type:'Dépôt',      devise:'CAD', montant:  50000.00, desc:'DEPOT SIPC - CP90104',                      compte:'1BD21L0'},
+  {id:'F005', date:'2025-12-15', type:'Dépôt',      devise:'CAD', montant:  35000.00, desc:'DEPOT SIPC - CP90104',                      compte:'1BD21L0'},
+  {id:'F006', date:'2025-12-18', type:'Intérêts',   devise:'USD', montant:      5.30, desc:'Intérêt au 16 déc',                         compte:'1BD21M8'},
+  {id:'F007', date:'2025-12-26', type:'Dividende',  devise:'USD', montant:      1.00, desc:'NVIDIA CORP (100 actions)',                  compte:'1BD21M8'},
+  {id:'F008', date:'2025-12-26', type:'Retenue',    devise:'USD', montant:     -0.15, desc:'Retenue d\'impôt — NVIDIA CORP',             compte:'1BD21M8'},
+  {id:'F009', date:'2026-03-17', type:'Dividende',  devise:'USD', montant:     13.59, desc:'SPDR SS SPDR S&P 500 / SPYM (70 actions)',   compte:'1BD21M8'},
+  {id:'F010', date:'2026-03-17', type:'Retenue',    devise:'USD', montant:     -2.04, desc:'Retenue d\'impôt — SPYM',                   compte:'1BD21M8'},
+  {id:'F011', date:'2026-03-27', type:'Dividende',  devise:'USD', montant:      9.83, desc:'INVESCO NASDAQ 100 ETF / QQQM (30 actions)', compte:'1BD21M8'},
+  {id:'F012', date:'2026-03-27', type:'Retenue',    devise:'USD', montant:     -1.47, desc:'Retenue d\'impôt — QQQM',                   compte:'1BD21M8'},
+  {id:'F013', date:'2026-03-31', type:'Dividende',  devise:'CAD', montant:     16.70, desc:'ISHARES S&PTSX CAP / XEG (100 actions)',     compte:'1BD21L0'},
+  {id:'F014', date:'2026-05-29', type:'Dépôt',      devise:'CAD', montant: 240000.00, desc:'DEPOT SIPC - CP90104',                      compte:'1BD21L0'},
+];
+let fluxView = 'tout';
+let fluxIdCounter = 15;
+
+function setFluxView(v) {
+  fluxView = v;
+  ['tout','Dépôt','Dividende'].forEach(k => {
+    const id = k==='tout'?'flux-v-tout':k==='Dépôt'?'flux-v-depot':'flux-v-div';
+    const el = document.getElementById(id);
+    if (el) el.className = 'btn '+(v===k?'btn-p':'btn-d');
+  });
+  renderFlux();
+}
+
+function renderFlux() {
+  const body  = document.getElementById('flux-body');
+  const foot  = document.getElementById('flux-foot');
+  const kpis  = document.getElementById('flux-kpis');
+  if (!body) return;
+
+  const data = fluxView === 'tout' ? fluxData
+             : fluxData.filter(f => f.type === fluxView);
+  const sorted = [...data].sort((a,b) => b.date.localeCompare(a.date));
+
+  // KPIs globaux (toujours sur tout)
+  const depots   = fluxData.filter(f=>f.type==='Dépôt').reduce((s,f)=>s+(f.devise==='CAD'?f.montant:f.montant*(mkt.USDCAD||1.397)),0);
+  const divUSD   = fluxData.filter(f=>f.type==='Dividende'&&f.devise==='USD').reduce((s,f)=>s+f.montant,0);
+  const divCAD   = fluxData.filter(f=>f.type==='Dividende'&&f.devise==='CAD').reduce((s,f)=>s+f.montant,0);
+  const retenues = fluxData.filter(f=>f.type==='Retenue').reduce((s,f)=>s+f.montant,0);
+  const divNet   = divUSD + retenues + divCAD/(mkt.USDCAD||1.397);
+
+  if (kpis) kpis.innerHTML = [
+    {l:'Dépôts totaux (CAD)',   v:'$'+fi(Math.round(depots))+' CAD',      s:'Depuis l\'ouverture du compte',          c:'g'},
+    {l:'Dividendes bruts (USD)',v:'$'+f2(divUSD)+' USD',                  s:'Dividendes reçus en USD cumulés',        c:'g'},
+    {l:'Dividendes bruts (CAD)',v:'$'+f2(divCAD)+' CAD',                  s:'Dividendes reçus en CAD cumulés',        c:'g'},
+    {l:'Retenues d\'impôt',    v:fi(retenues.toFixed(2))+' USD',          s:'Retenues à la source (non récupérables)',c:'a'},
+    {l:'Dividendes nets (USD)', v:'$'+f2(divNet.toFixed(2))+' USD equiv',  s:'Bruts − retenues, tout en USD',          c:'g'},
+  ].map(k => `<div class="kpi-card kpi-${k.c}">
+    <div class="kpi-label">${k.l}</div>
+    <div class="kpi-value kpi-${k.c}">${k.v}</div>
+    <div class="kpi-sub">${k.s}</div>
+  </div>`).join('');
+
+  const typeCol = {
+    'Dépôt':'var(--green)', 'Transfert':'var(--cyan,#4ec9b0)',
+    'Conversion':'var(--amber)', 'Dividende':'var(--green)',
+    'Intérêts':'var(--green)', 'Retenue':'var(--red)', 'Retrait':'var(--red)',
+  };
+
+  body.innerHTML = sorted.map(f => {
+    const col = typeCol[f.type] || 'var(--fg)';
+    const sgn = f.montant >= 0 ? '+' : '';
+    return `<tr>
+      <td style="font-size:10px;color:var(--muted)">${f.date}</td>
+      <td><span style="font-size:10px;font-weight:600;color:${col};background:${col}22;padding:2px 7px;border-radius:3px">${f.type}</span></td>
+      <td style="font-size:10px;color:var(--muted)">${f.devise}</td>
+      <td style="font-family:var(--mono);color:${f.montant>=0?'var(--green)':'var(--red)'};font-weight:600">${sgn}${f2(Math.abs(f.montant))}$</td>
+      <td style="font-size:11px">${f.desc}</td>
+      <td style="font-size:10px;color:var(--muted)">${f.compte||'—'}</td>
+      <td><button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px" onclick="deleteFlux('${f.id}')">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  // Totaux par devise
+  const totCAD = data.filter(f=>f.devise==='CAD').reduce((s,f)=>s+f.montant,0);
+  const totUSD = data.filter(f=>f.devise==='USD').reduce((s,f)=>s+f.montant,0);
+  const sgnC = totCAD>=0?'+':'', sgnU = totUSD>=0?'+':'';
+  foot.innerHTML = `<tr style="border-top:2px solid var(--border)">
+    <td colspan="3" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL AFFICHÉ</td>
+    <td style="font-family:var(--mono);font-weight:600;color:var(--green)">
+      ${sgnC}${f2(Math.abs(totCAD))}$ CAD<br>
+      <span style="color:var(--green)">${sgnU}${f2(Math.abs(totUSD))}$ USD</span>
+    </td>
+    <td colspan="3"></td>
+  </tr>`;
+}
+
+function onFluxTypeChange() {
+  const type  = document.getElementById('fm-type')?.value;
+  const hint  = document.getElementById('fm-conversion-hint');
+  const label = document.getElementById('fm-montant-label');
+  if (!hint || !label) return;
+  if (type === 'Conversion') {
+    hint.style.display = 'block';
+    label.textContent = 'Montant entrant (devise choisie)';
+  } else {
+    hint.style.display = 'none';
+    label.textContent = 'Montant (+ entrant, − sortant)';
+  }
+}
+
+function openFluxModal() {
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('fm-date').value    = today;
+  document.getElementById('fm-type').value    = 'Dépôt';
+  document.getElementById('fm-devise').value  = 'CAD';
+  document.getElementById('fm-montant').value = '';
+  document.getElementById('fm-desc').value    = '';
+  document.getElementById('fm-compte').value  = '1BD21L0';
+  document.getElementById('flux-modal').style.display = 'flex';
+}
+function closeFluxModal() {
+  document.getElementById('flux-modal').style.display = 'none';
+}
+function saveFlux() {
+  const id      = 'F'+String(fluxIdCounter++).padStart(3,'0');
+  const type    = document.getElementById('fm-type').value;
+  const devise  = document.getElementById('fm-devise').value;
+  const montant = parseFloat(document.getElementById('fm-montant').value)||0;
+  const flux = {
+    id,
+    date:    document.getElementById('fm-date').value,
+    type,
+    devise,
+    montant,
+    desc:    document.getElementById('fm-desc').value,
+    compte:  document.getElementById('fm-compte').value,
+  };
+  fluxData.push(flux);
+  fluxData.sort((a,b)=>a.date.localeCompare(b.date));
+  closeFluxModal();
+  renderFlux();
+  saveFluxToSheets();
+
+  // ── Mise à jour automatique du cash ──────────────────────────────────
+  // Tous les types qui modifient un solde liquide
+  const impacteCash = ['Dépôt','Retrait','Dividende','Intérêts','Retenue','Transfert'];
+  if (impacteCash.includes(type) && montant !== 0) {
+    adjustCash(devise, montant);
+    const msg = `Cash ${devise} ajusté de ${montant >= 0 ? '+' : ''}${f2(Math.abs(montant))}$`;
+    setSyncStatus(true, msg);
+    setTimeout(()=>setSyncStatus(true,'✓ Synchronisé'), 3000);
+  }
+  // Conversion : impacte les DEUX devises simultanément
+  // Le montant saisi est le montant entrant dans la devise choisie
+  // L'app calcule l'équivalent dans l'autre devise au taux live
+  if (type === 'Conversion' && montant !== 0) {
+    const fx = mkt.USDCAD || parseFloat(gv('c-fx','1.397'));
+    if (devise === 'USD') {
+      // USD entrant → CAD sortant
+      adjustCash('USD', montant);
+      adjustCash('CAD', -(montant * fx));
+      setSyncStatus(true, `Conversion: +${f2(montant)}$ USD / −${f2(montant*fx)}$ CAD`);
+    } else {
+      // CAD entrant → USD sortant
+      adjustCash('CAD', montant);
+      adjustCash('USD', -(montant / fx));
+      setSyncStatus(true, `Conversion: +${f2(montant)}$ CAD / −${f2(montant/fx)}$ USD`);
+    }
+    setTimeout(()=>setSyncStatus(true,'✓ Synchronisé'), 3000);
+  }
+}
+function deleteFlux(id) {
+  fluxData = fluxData.filter(f=>f.id!==id);
+  renderFlux();
+  saveFluxToSheets(); // persister uniquement sur action explicite
+}
+async function saveFluxToSheets() {
+  // Persister dans Sheets via saveCompte (clé FluxData)
+  // Ne pas appeler automatiquement depuis renderFlux — seulement depuis saveFlux/deleteFlux
+  try {
+    await gsApi({action:'saveCompte', FluxData: JSON.stringify(fluxData), FluxIdCounter: String(fluxIdCounter)});
+  } catch(e) { console.warn('saveFluxToSheets:', e); }
+}
+async function loadFluxFromSheets(cpt) {
+  if (cpt && cpt.FluxData) {
+    try {
+      const saved = JSON.parse(cpt.FluxData);
+      if (Array.isArray(saved) && saved.length > 0) {
+        fluxData = saved;
+        fluxIdCounter = parseInt(cpt.FluxIdCounter||15);
+      }
+    } catch(e) {}
+  }
+}
+
 function recalcCompte() {
   var m = calcMarge();
   var fx2=m.fx, cashU2=m.cashU, cashC2=m.cashC;
