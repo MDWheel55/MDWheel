@@ -1576,17 +1576,27 @@ function renderPnlRealized() {
     const book = openBook[k];
     const primeMoyOuv = book && book.totalQty > 0 ? book.totalPrime / book.totalQty : 0;
 
+    // Sanity check: prix unitaire d'une option doit être entre 0 et ~1000$
+    // Si prixFerm > 2000, c'est probablement le montant brut, pas le prix unitaire
+    const prixUnitaire = prixFerm > 2000 ? 0 : prixFerm;
+    const primeMoy     = primeMoyOuv > 2000 ? 0 : primeMoyOuv;
+
+    let pnl = 0;
     if (t.action === 'EXP') {
-      // Expiration sans valeur : gain = prime reçue à l'ouverture × qty × 100
-      return Math.round(primeMoyOuv * qty * 100);
+      pnl = Math.round(primeMoy * qty * 100);
     } else if (t.action === 'BTC') {
-      // Rachat d'un short : gain = (prime_reçue − prime_rachat) × qty × 100
-      return Math.round((primeMoyOuv - prixFerm) * qty * 100);
+      pnl = Math.round((primeMoy - prixUnitaire) * qty * 100);
     } else if (t.action === 'STC') {
-      // Vente d'un long : gain = (prix_vente − coût_achat) × qty × 100
-      return Math.round((prixFerm - primeMoyOuv) * qty * 100);
+      pnl = Math.round((prixUnitaire - primeMoy) * qty * 100);
     }
-    return 0;
+
+    // Sanity check final : P&L max raisonnable par trade = 500 000$
+    if (Math.abs(pnl) > 500000) {
+      console.warn('P&L aberrant détecté:', t.ticker, t.strike, t.action, 'pnl=', pnl,
+        'prixFerm=', prixFerm, 'primeMoyOuv=', primeMoyOuv, 'qty=', qty, 'key=', k);
+      return 0;
+    }
+    return pnl;
   }
 
   const ouvertures = trades.filter(t => t.action === 'STO' || t.action === 'BTO');
