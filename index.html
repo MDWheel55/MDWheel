@@ -1247,30 +1247,46 @@ function renderDashPositions() {
 }
 
 
-// ── VALEUR D'EMPRUNT (estimation CBOE) ────────────────────────────────────
-// Formule: MAX(20% × prix_sous-jacent × contr×100 − valeur_hors_jeu + prime, 10% × strike × contr×100)
-// Valeur d'emprunt = marge requise − prime reçue (valeur nette bloquée)
+// ── VALEUR D'EMPRUNT (formule exacte Disnat — régression linéaire) ──────────
+// VE = (a × prix_sous_jacent + b) × qty, coefficients calibrés sur 3 snapshots Disnat juin 2026
+// Même logique que calcMarge() — cohérence garantie entre l'affichage par position et le total
 // Pour longs et short-calls: 0 (pas de marge de put)
 function calcValEmprunt(p) {
   if (p.statut !== 'short') return 0;
-  const strike  = parseFloat(p.strike) || 0;
-  const prime   = parseFloat(p.prime)  || 0;
-  const actuel  = parseFloat(p.prixActuel) || prime;
-  const contr   = Math.abs(parseInt(p.contrats) || 1);
-  const mult    = contr * 100;
-  // Prix sous-jacent depuis mkt (ou approximation strike si non dispo)
-  const tkr = (p.ticker||'').toUpperCase();
-  const sousjacent = (tkr==='QQQ'&&mkt.QQQ>0)?mkt.QQQ
-                   : (tkr==='SPY'&&mkt.SPY>0)?mkt.SPY
-                   : (tkr==='GLD'&&mkt.GLD>0)?mkt.GLD
-                   : strike; // fallback
-  const horsJeu   = Math.max(0, strike - sousjacent) * mult;
-  const margeA    = 0.20 * sousjacent * mult - horsJeu + actuel * mult;
-  const margeB    = 0.10 * strike * mult;
-  const margeReq  = Math.max(margeA, margeB);
-  // Valeur d'emprunt = marge requise − prime totale reçue (déjà encaissée)
-  const primeRecue = prime * mult;
-  return Math.max(0, Math.round(margeReq - primeRecue));
+  const strike = parseFloat(p.strike) || 0;
+  const contr  = Math.abs(parseInt(p.contrats) || 1);
+  const tkr    = (p.ticker||'').toUpperCase();
+  const S      = (tkr==='QQQ'&&mkt.QQQ>0)?mkt.QQQ
+               : (tkr==='SPY'&&mkt.SPY>0)?mkt.SPY
+               : (tkr==='GLD'&&mkt.GLD>0)?mkt.GLD
+               : 0;
+  if (S === 0) return Math.round(strike * 100 * contr * 0.20); // fallback sans prix
+
+  // Priorité 1 : coefficients stockés dans la position (Sheets) — pour positions rollées
+  const posA = (p.veA !== undefined && p.veA !== null && !isNaN(parseFloat(p.veA))) ? parseFloat(p.veA) : null;
+  const posB = (p.veB !== undefined && p.veB !== null && !isNaN(parseFloat(p.veB))) ? parseFloat(p.veB) : null;
+
+  // Priorité 2 : table de coefficients par défaut (calibrés juin 2026)
+  const veCoeffsLocal = {
+    'GLD|360':  {a: -104.1063, b: 51559.77},
+    'QQQ|490':  {a:   -1.4729, b:  4549.23},
+    'QQQ|480':  {a:   -2.1406, b:  3382.12},
+    'QQQ|520':  {a:  -10.6093, b: 12359.72},
+    'SPY|595':  {a:  -70.0570, b: 61675.69},
+  };
+  const key = tkr+'|'+Math.round(strike);
+  const def = veCoeffsLocal[key];
+
+  let ve;
+  if (posA !== null && posB !== null) {
+    ve = Math.max(0, (posA * S + posB) * contr);
+  } else if (def) {
+    ve = Math.max(0, (def.a * S + def.b) * contr);
+  } else {
+    // Fallback notionnel × 20% pour positions hors table (nouvelles positions après roll)
+    ve = strike * 100 * contr * 0.20;
+  }
+  return Math.round(ve);
 }
 
 function posRow(p, showOcc) {
