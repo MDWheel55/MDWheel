@@ -289,6 +289,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <div class="pos-toolbar">
     <button class="btn btn-p" onclick="openStkModal()">+ Nouvelle action</button>
     <button class="btn btn-g" onclick="syncSheets()">&#9729; Sync Sheets</button>
+    <button class="btn btn-d" onclick="importHistoriqueActions()" title="Importer les 18 transactions historiques 2026 depuis les relevés Disnat" style="font-size:10px">⬆ Import historique 2026</button>
     <div style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted)" id="stk-msg"></div>
   </div>
 
@@ -2904,6 +2905,73 @@ function renderActionsTable() {
   renderPnlActRealized();
 }
 
+// ── IMPORT HISTORIQUE ACTIONS 2026 ────────────────────────────────────────
+// 11 transactions minimales pour la vérité comptable 2026
+// 7 achats (coût moyen) + 4 ventes (P&L réalisé)
+// Les achats SPYM sans vente associée en 2026 sont exclus
+async function importHistoriqueActions() {
+  if (!confirm('Importer les 11 transactions historiques actions 2026?\n\n4 ventes avec P&L + 7 achats nécessaires au coût moyen\n(SCHB, QQQ, SPY, QQQM — relevés Disnat jan-mars 2026)\n\nSans impact sur le cash actuel.')) return;
+
+  const msg = document.getElementById('stk-msg');
+  if(msg) msg.textContent = 'Import en cours...';
+  setSyncStatus(false, 'Import historique...');
+
+  const trades = [
+    // ── Achats nécessaires au coût moyen des ventes ──
+    // QQQ & SPY → vendus le 25 fév
+    ["2026-01-14","ACHAT","QQQ", "Invesco QQQ Trust ETF",         2, 616.20,"USD"],
+    ["2026-01-14","ACHAT","SPY", "State Street SPDR S&P 500 ETF", 6, 688.28,"USD"],
+    ["2026-01-21","ACHAT","QQQ", "Invesco QQQ Trust ETF",         2, 615.67,"USD"],
+    ["2026-01-21","ACHAT","SPY", "State Street SPDR S&P 500 ETF", 2, 684.00,"USD"],
+    ["2026-02-06","ACHAT","QQQ", "Invesco QQQ Trust ETF",         4, 599.82,"USD"],
+    // SCHB → vendu le 9 mars
+    ["2026-02-25","ACHAT","SCHB","Schwab US Broad Market ETF",  205,  26.75,"USD"],
+    // QQQM → vendu le 27 mars
+    ["2026-02-06","ACHAT","QQQM","Invesco Nasdaq 100 ETF",       20, 253.69,"USD"],
+
+    // ── 4 ventes avec P&L réalisé ──
+    ["2026-02-25","VENTE","QQQ", "Invesco QQQ Trust ETF",         8, 616.20,"USD"], // P&L +67$
+    ["2026-02-25","VENTE","SPY", "State Street SPDR S&P 500 ETF", 8, 693.00,"USD"], // P&L +46$
+    ["2026-03-09","VENTE","SCHB","Schwab US Broad Market ETF",  205,  25.81,"USD"], // P&L -193$
+    ["2026-03-27","VENTE","QQQM","Invesco Nasdaq 100 ETF",       30, 233.51,"USD"], // P&L -538$
+  ];
+
+  let ok = 0, err = 0;
+  for (const [date, op, sym, nom, qty, px, dev] of trades) {
+    try {
+      const montant = Math.round(qty * px * 100) / 100;
+      const tradeId = 'TA-HIST-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
+      await gsApi({
+        action:    'saveTradeAction',
+        tradeId,
+        date,
+        symbole:   sym,
+        nom,
+        devise:    dev,
+        operation: op,
+        quantite:  qty,
+        prix:      f2(px),
+        montant:   f2(op==='VENTE' ? montant : -montant),
+        frais:     '0',
+        pnl:       0,
+      });
+      ok++;
+      if(msg) msg.textContent = `Import: ${ok}/${trades.length}...`;
+    } catch(e) { err++; }
+  }
+
+  const ta = await gsApi({action:'getTradesActions'});
+  if (ta && typeof renderTradesActions === 'function') renderTradesActions(ta);
+
+  setSyncStatus(true, `✓ Import terminé: ${ok} trades, ${err} erreurs`);
+  if(msg) setTimeout(()=>{ if(msg) msg.textContent=''; }, 4000);
+
+  if (ok > 0) {
+    const btn = document.querySelector('button[onclick="importHistoriqueActions()"]');
+    if (btn) btn.style.display = 'none';
+  }
+}
+
 // ── P&L RÉALISÉ ACTIONS ────────────────────────────────────────────────────
 let pnlActView = 'mois';
 function setPnlActView(v) {
@@ -3024,20 +3092,19 @@ function renderPnlActRealized() {
   });
 
   const keys = Object.keys(periods).sort().reverse();
-  head.innerHTML = '<tr><th>PÉRIODE</th><th style="text-align:right">ACHATS</th><th style="text-align:right">VENTES</th><th style="text-align:right">FRAIS</th><th style="text-align:right">P&L RÉALISÉ</th></tr>';
-  if (!keys.length) { body.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune transaction</td></tr>`; foot.innerHTML=''; return; }
+  head.innerHTML = '<tr><th>PÉRIODE</th><th style="text-align:right">ACHATS</th><th style="text-align:right">VENTES</th><th style="text-align:right">P&L RÉALISÉ</th></tr>';
+  if (!keys.length) { body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune transaction</td></tr>`; foot.innerHTML=''; return; }
 
-  let tAchats=0, tVentes=0, tPnl=0, tFrais=0;
+  let tAchats=0, tVentes=0, tPnl=0;
   body.innerHTML = keys.map(k => {
     const p = periods[k];
-    tAchats += p.achats; tVentes += p.ventes; tPnl += p.pnl; tFrais += p.frais;
+    tAchats += p.achats; tVentes += p.ventes; tPnl += p.pnl;
     const col = p.nbVentes===0 ? 'var(--muted)' : p.pnl>=0?'var(--green)':'var(--red)';
     const pnlStr = p.nbVentes===0 ? '—' : (p.pnl>=0?'+':'')+fi(p.pnl)+'$';
     return `<tr>
       <td style="font-weight:600">${k}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--red)">${p.achats?'-'+fi(p.achats)+'$':'—'}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--green)">${p.ventes?'+'+fi(p.ventes)+'$':'—'}</td>
-      <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${p.frais?'$'+fi(p.frais):'—'}</td>
       <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${pnlStr}</td>
     </tr>`;
   }).join('');
@@ -3045,7 +3112,6 @@ function renderPnlActRealized() {
     <td style="padding:8px;font-weight:600">TOTAL</td>
     <td style="text-align:right;font-family:var(--mono);color:var(--red)">${tAchats?'-'+fi(tAchats)+'$':'—'}</td>
     <td style="text-align:right;font-family:var(--mono);color:var(--green)">${tVentes?'+'+fi(tVentes)+'$':'—'}</td>
-    <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${tFrais?'$'+fi(tFrais):'—'}</td>
     <td style="text-align:right;font-weight:700;font-family:var(--mono);color:${tPnl>=0?'var(--green)':'var(--red)'}">${tPnl>=0?'+':''}${fi(tPnl)}$</td>
   </tr>`;
 }
