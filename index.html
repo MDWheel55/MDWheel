@@ -275,7 +275,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
       <thead><tr>
         <th>DATE</th><th>ID</th><th>TICKER</th><th>TYPE</th>
         <th>STRIKE</th><th>EXPIRATION</th><th>ACTION</th>
-        <th>CONTRATS</th><th>PRIX</th><th>FRAIS</th><th>P&L</th>
+        <th>CONTRATS</th><th>PRIX</th><th>PRIME NETTE</th>
       </tr></thead>
       <tbody id="trades-body"></tbody>
     </table>
@@ -1576,12 +1576,20 @@ function renderTrades(rawTrades) {
           '<td><span class="tag '+actCls+'">'+t.action+'</span></td>' +
           '<td>'+t.contrats+'</td>' +
           '<td>$'+f2(parseFloat(t.prix))+'</td>' +
-          '<td style="color:var(--muted)">'+(parseFloat(t.frais)>0?'$'+f2(parseFloat(t.frais)):'—')+'</td>' +
-          '<td style="color:'+(pnl>=0?'var(--green)':'var(--red)')+'">'+
-            (pnl>=0?'+':'')+fi(pnl)+'$</td>' +
+          '<td style="color:var(--green);font-family:var(--mono);font-weight:600">'+
+            (()=>{
+              const contr = Math.abs(parseFloat(t.contrats)||1);
+              const prix  = parseFloat(t.prix)||0;
+              const prime = prix * 100 * contr;
+              const a = t.action;
+              // STO/EXP = prime encaissée (vert), BTC/STC = prime déboursée (rouge), BTO = prime payée (rouge)
+              if (a==='STO'||a==='EXP') return '+$'+fi(Math.round(prime));
+              if (a==='BTC'||a==='STC'||a==='BTO') return '−$'+fi(Math.round(prime));
+              return '$'+fi(Math.round(prime));
+            })()+'</td>' +
         '</tr>';
       }).join('')
-    : '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:1rem">Aucun trade enregistré</td></tr>';
+    : '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1rem">Aucun trade enregistré</td></tr>';
 }
 
 // ═══ MODAL ═══
