@@ -391,6 +391,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <div class="sec">REVENU PASSIF MENSUEL ESTIMÉ</div>
   <div class="kpi-grid" id="revenu-kpis"></div>
 
+  <!-- GRAPHIQUE PERFORMANCE -->
+  <div class="sec" style="display:flex;align-items:center;justify-content:space-between;margin-top:1rem">
+    <span>PERFORMANCE DU PORTEFEUILLE</span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="btn btn-d" id="perf-v-sem"   style="padding:3px 10px;font-size:10px" onclick="setPerfView('semaine')">Semaine</button>
+      <button class="btn btn-p" id="perf-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('mois')">Mois</button>
+      <button class="btn btn-d" id="perf-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPerfView('annee')">Année</button>
+      <button class="btn btn-d" id="perf-v-tout"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('tout')">Tout</button>
+    </div>
+  </div>
+  <div id="perf-chart-container" style="position:relative;background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:1rem;margin-bottom:1.5rem;min-height:220px">
+    <canvas id="perf-chart" style="width:100%;height:200px"></canvas>
+    <div id="perf-no-data" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-family:var(--mono)">
+      Données insuffisantes — le graphique se remplira automatiquement lors des actualisations quotidiennes
+    </div>
+    <div id="perf-stats" style="display:flex;gap:16px;margin-top:8px;font-family:var(--mono);font-size:10px;flex-wrap:wrap"></div>
+  </div>
+
 </div>
 
 
@@ -3294,6 +3312,144 @@ async function loadFluxFromSheets(cpt) {
       }
     } catch(e) {}
   }
+  // Charger aussi les snapshots de performance
+  await loadPerfSnapshots(cpt);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  GRAPHIQUE PERFORMANCE — Snapshot automatique quotidien
+// ══════════════════════════════════════════════════════════════════
+
+let perfSnapshots = []; // [{date, valeurUSD, valeurCAD, margePct, fx}]
+let perfView = 'mois';
+
+function setPerfView(v) {
+  perfView = v;
+  ['semaine','mois','annee','tout'].forEach(k => {
+    const el = document.getElementById('perf-v-'+k);
+    if (el) el.className = 'btn '+(v===k?'btn-p':'btn-d');
+  });
+  renderPerfChart();
+}
+
+// Prendre un snapshot si le dernier date de plus de 20h
+async function maybeSnapshot(valeurUSD, valeurCAD, margePct, fx) {
+  const today = new Date().toISOString().slice(0,10);
+  const last  = perfSnapshots.length ? perfSnapshots[perfSnapshots.length-1].date : '';
+  if (last === today) return; // déjà pris aujourd'hui
+
+  const snap = {date: today, valeurUSD: Math.round(valeurUSD), valeurCAD: Math.round(valeurCAD), margePct: Math.round(margePct*10)/10, fx: Math.round(fx*10000)/10000};
+  perfSnapshots.push(snap);
+  perfSnapshots.sort((a,b) => a.date.localeCompare(b.date));
+
+  // Sauvegarder dans Sheets
+  try {
+    await gsApi({action:'saveCompte', PerfSnapshots: JSON.stringify(perfSnapshots)});
+  } catch(e) {}
+  renderPerfChart();
+}
+
+async function loadPerfSnapshots(cpt) {
+  if (cpt && cpt.PerfSnapshots) {
+    try {
+      const saved = JSON.parse(cpt.PerfSnapshots);
+      if (Array.isArray(saved) && saved.length > 0) {
+        perfSnapshots = saved;
+        renderPerfChart();
+      }
+    } catch(e) {}
+  }
+}
+
+function renderPerfChart() {
+  const container = document.getElementById('perf-chart-container');
+  const noData    = document.getElementById('perf-no-data');
+  const statsEl   = document.getElementById('perf-stats');
+  const canvas    = document.getElementById('perf-chart');
+  if (!canvas) return;
+
+  // Filtrer par période
+  const now  = new Date();
+  const cuts = {
+    semaine: new Date(now - 7*86400000).toISOString().slice(0,10),
+    mois:    new Date(now - 30*86400000).toISOString().slice(0,10),
+    annee:   new Date(now.getFullYear(), 0, 1).toISOString().slice(0,10),
+    tout:    '2000-01-01',
+  };
+  const cutDate = cuts[perfView] || cuts.mois;
+  const data = perfSnapshots.filter(s => s.date >= cutDate);
+
+  if (data.length < 2) {
+    if (noData) noData.style.display = 'flex';
+    canvas.style.display = 'none';
+    if (statsEl) statsEl.innerHTML = '';
+    return;
+  }
+  if (noData) noData.style.display = 'none';
+  canvas.style.display = 'block';
+
+  // Dessin SVG inline (pas de dépendance externe)
+  const W = canvas.offsetWidth || 600;
+  const H = 190;
+  const PAD = {t:20, r:20, b:30, l:70};
+  const pts = data.map(s => s.valeurCAD);
+  const minV = Math.min(...pts) * 0.995;
+  const maxV = Math.max(...pts) * 1.005;
+  const scaleX = i => PAD.l + (i / (data.length-1)) * (W - PAD.l - PAD.r);
+  const scaleY = v => PAD.t + (1 - (v-minV)/(maxV-minV)) * (H - PAD.t - PAD.b);
+
+  // Couleur: vert si hausse, rouge si baisse
+  const trend = pts[pts.length-1] >= pts[0] ? 'var(--green)' : 'var(--red)';
+  const polyline = data.map((s,i) => `${scaleX(i)},${scaleY(s.valeurCAD)}`).join(' ');
+  const areaPath = `M${scaleX(0)},${scaleY(data[0].valeurCAD)} ` +
+    data.map((s,i) => `L${scaleX(i)},${scaleY(s.valeurCAD)}`).join(' ') +
+    ` L${scaleX(data.length-1)},${H-PAD.b} L${scaleX(0)},${H-PAD.b} Z`;
+
+  // Graduations Y (3 lignes)
+  const yTicks = [minV, (minV+maxV)/2, maxV].map(v => ({
+    y: scaleY(v), label: '$'+fi(Math.round(v/1000))+'k'
+  }));
+  // Dates X (jusqu'à 6 labels)
+  const step = Math.max(1, Math.floor(data.length/5));
+  const xLabels = data.filter((_,i) => i%step===0 || i===data.length-1).map(s => ({
+    x: scaleX(data.indexOf(s)), label: s.date.slice(5) // MM-DD
+  }));
+
+  const svgId = 'perf-svg-'+Date.now();
+  canvas.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:${H}px">
+    <defs>
+      <linearGradient id="${svgId}-grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${trend}" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="${trend}" stop-opacity="0.02"/>
+      </linearGradient>
+    </defs>
+    <!-- Grille -->
+    ${yTicks.map(t => `
+      <line x1="${PAD.l}" y1="${t.y}" x2="${W-PAD.r}" y2="${t.y}" stroke="var(--border)" stroke-width="1" stroke-dasharray="4,4"/>
+      <text x="${PAD.l-6}" y="${t.y+4}" text-anchor="end" fill="var(--muted)" font-size="9" font-family="monospace">${t.label}</text>
+    `).join('')}
+    ${xLabels.map(t => `
+      <text x="${t.x}" y="${H-PAD.b+14}" text-anchor="middle" fill="var(--muted)" font-size="9" font-family="monospace">${t.label}</text>
+    `).join('')}
+    <!-- Aire -->
+    <path d="${areaPath}" fill="url(#${svgId}-grad)"/>
+    <!-- Ligne -->
+    <polyline points="${polyline}" fill="none" stroke="${trend}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- Dernier point -->
+    <circle cx="${scaleX(data.length-1)}" cy="${scaleY(data[data.length-1].valeurCAD)}" r="4" fill="${trend}"/>
+  </svg>`;
+
+  // Stats
+  const first = data[0], last2 = data[data.length-1];
+  const delta = last2.valeurCAD - first.valeurCAD;
+  const deltaPct = (delta / first.valeurCAD * 100).toFixed(1);
+  const col = delta >= 0 ? 'var(--green)' : 'var(--red)';
+  if (statsEl) statsEl.innerHTML = [
+    `<span style="color:var(--muted)">Début: <b style="color:var(--fg)">$${fi(first.valeurCAD)} CAD</b></span>`,
+    `<span style="color:var(--muted)">Actuel: <b style="color:var(--fg)">$${fi(last2.valeurCAD)} CAD</b></span>`,
+    `<span style="color:var(--muted)">Variation: <b style="color:${col}">${delta>=0?'+':''}${fi(Math.round(delta))}$ (${delta>=0?'+':''}${deltaPct}%)</b></span>`,
+    `<span style="color:var(--muted)">${data.length} points · ${first.date} → ${last2.date}</span>`,
+  ].join('');
 }
 
 function recalcCompte() {
@@ -3374,9 +3530,7 @@ function recalcCompte() {
   var kpiEl = document.getElementById('compte-kpis');
   if(kpiEl) kpiEl.innerHTML =
     '<div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">VALEUR & PERFORMANCE</div>'+
-    kpi1.map(mkKpi).join('')+
-    '<div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-top:1rem;margin-bottom:6px;padding-top:0.75rem;border-top:1px solid var(--border)">MARGE & CAPACITÉ</div>'+
-    kpi2.map(mkKpi).join('');
+    kpi1.map(mkKpi).join('');
 
   // Revenu mensuel
   var notQ=positions.filter(function(p){return p.ticker==='QQQ'&&p.statut==='short';}).reduce(function(s,p){return s+parseFloat(p.strike)*100*parseInt(p.contrats);},0);
@@ -3401,6 +3555,9 @@ function recalcCompte() {
   }).join('');
 
   renderActionsTable();
+  // Snapshot automatique quotidien
+  maybeSnapshot(total, totalCAD, margePct, fx2);
+  renderPerfChart();
 }
 
 // ═══ INIT ═══
