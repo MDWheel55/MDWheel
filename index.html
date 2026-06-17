@@ -402,7 +402,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </div>
   </div>
   <div id="perf-chart-container" style="position:relative;background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:1rem;margin-bottom:1.5rem;min-height:220px">
-    <canvas id="perf-chart" style="width:100%;height:200px"></canvas>
+    <div id="perf-chart" style="width:100%;min-height:190px"></div>
     <div id="perf-no-data" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-family:var(--mono)">
       Données insuffisantes — le graphique se remplira automatiquement lors des actualisations quotidiennes
     </div>
@@ -1210,16 +1210,8 @@ async function actualiserTout() {
   renderPositions(); // Mettre à jour les P&L options aussi
 
   // ── Snapshot performance quotidien ──
-  // Appelé ici (après loadPerfSnapshots et recalcCompte) pour garantir
-  // que perfSnapshots est chargé et que les valeurs sont à jour
-  if(steps.marche) {
-    const m2 = calcMarge();
-    const fx3 = m2.fx;
-    const qV2=acctQty.VEQT,qX2=acctQty.XEG,qS2=acctQty.SPYM,qC2=acctQty.CBIL,qU2=acctQty.UBIL,qGLD2=acctQty.GLD,qIBIT2=acctQty.IBIT||600;
-    const snapTotal = qV2*(mkt.VEQT||59)/fx3 + qX2*(mkt.XEG||26)/fx3 + qS2*(mkt.SPYM||89)
-                    + qC2*(mkt.CBIL||50)/fx3 + qU2*(mkt.UBIL||50) + qGLD2*(mkt.GLD||398)
-                    + qIBIT2*(mkt.IBIT||35) + m2.cashU + m2.cashC/fx3;
-    maybeSnapshot(snapTotal, Math.round(snapTotal*fx3), m2.margePct, fx3);
+  if(steps.marche && window._lastTotalCAD) {
+    maybeSnapshot(window._lastTotalUSD, window._lastTotalCAD, window._lastMargePct, window._lastFX);
   }
 
   // ── Statut final ──
@@ -3406,10 +3398,9 @@ function renderPerfChart() {
   if (noData) noData.style.display = 'none';
   canvas.style.display = 'block';
 
-  // Dessin SVG inline (pas de dépendance externe)
-  const W = canvas.offsetWidth || 600;
-  const H = 190;
-  const PAD = {t:20, r:20, b:30, l:70};
+  // SVG responsive — viewBox fixe, s'adapte via CSS
+  const W = 600, H = 190;
+  const PAD = {t:20, r:20, b:30, l:72};
   const pts = data.map(s => s.valeurCAD);
   const minV = Math.min(...pts) * 0.995;
   const maxV = Math.max(...pts) * 1.005;
@@ -3433,8 +3424,8 @@ function renderPerfChart() {
     x: scaleX(data.indexOf(s)), label: s.date.slice(5) // MM-DD
   }));
 
-  const svgId = 'perf-svg-'+Date.now();
-  canvas.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:${H}px">
+  const svgId = 'pg'+Math.random().toString(36).slice(2,7);
+  canvas.innerHTML = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:${H}px;display:block" preserveAspectRatio="none">
     <defs>
       <linearGradient id="${svgId}-grad" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="${trend}" stop-opacity="0.25"/>
@@ -3478,8 +3469,15 @@ function recalcCompte() {
   var qV=acctQty.VEQT,qX=acctQty.XEG,qS=acctQty.SPYM,qC=acctQty.CBIL,qU=acctQty.UBIL,qGLD=acctQty.GLD;
   var valV=qV*pV/fx2, valX=qX*pX/fx2, valS=qS*pS, valC=qC*pC/fx2, valU=qU*pU;
   var valGLD=qGLD*pGLD;
-  var total = valV+valX+valS+valC+valU+valGLD+cashU2+cashC2/fx2;
+  // Valeur IBIT
+  var valIBIT = acctQty.IBIT * (mkt.IBIT||34.85);
+  var total = valV+valX+valS+valC+valU+valGLD+valIBIT+cashU2+cashC2/fx2;
   var totalCAD = total * fx2;
+  // Exposer pour maybeSnapshot (même valeur que les KPIs)
+  window._lastTotalUSD = Math.round(total);
+  window._lastTotalCAD = Math.round(totalCAD);
+  window._lastMargePct = m.margePct;
+  window._lastFX       = fx2;
   var emprunt = m.emprunt;
   var notionnel = m.notionnel;
   var margeReq  = m.margeReq;
@@ -3496,8 +3494,6 @@ function recalcCompte() {
     else       return s + (prime-actuel)*100*contr;
   }, 0);
 
-  // Valeur IBIT
-  var valIBIT = acctQty.IBIT * (mkt.IBIT||34.85);
   var pnlActions = window._pnlActionsUSD || 0;
   // KPI Ligne 1 — Valeur & Performance
   var kpi1 = [
