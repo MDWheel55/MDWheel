@@ -629,7 +629,7 @@ function showTab(name, el) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   el.classList.add('active');
-  if(name === 'compte')  { recalcCompte(); }
+  if(name === 'compte')  { recalcCompte(); renderPerfChart(); }
   if(name === 'options') { renderPositions(); }
   if(name === 'actions') {
     renderStocks(); renderActionsTable();
@@ -3337,11 +3337,10 @@ function setPerfView(v) {
   renderPerfChart();
 }
 
-// Prendre un snapshot si le dernier date de plus de 20h
+// Prendre/mettre à jour un snapshot quotidien
 async function maybeSnapshot(valeurUSD, valeurCAD, margePct, fx) {
   const today = new Date().toISOString().slice(0,10);
-  const last  = perfSnapshots.length ? perfSnapshots[perfSnapshots.length-1].date : '';
-  if (last === today) return; // déjà pris aujourd'hui
+  const existingIdx = perfSnapshots.findIndex(s => s.date === today);
 
   const snap = {
     date:      today,
@@ -3350,10 +3349,19 @@ async function maybeSnapshot(valeurUSD, valeurCAD, margePct, fx) {
     margePct:  Math.round(margePct*10)/10,
     fx:        Math.round(fx*10000)/10000
   };
-  perfSnapshots.push(snap);
+
+  if (existingIdx >= 0) {
+    // Snapshot du jour existe déjà — mettre à jour seulement si la valeur a changé de >1%
+    const old = perfSnapshots[existingIdx];
+    const ecart = Math.abs(snap.valeurCAD - old.valeurCAD) / Math.max(1, old.valeurCAD);
+    if (ecart < 0.01) { renderPerfChart(); return; } // valeur quasi identique, rien à faire
+    perfSnapshots[existingIdx] = snap; // remplacer
+  } else {
+    perfSnapshots.push(snap);
+  }
   perfSnapshots.sort((a,b) => a.date.localeCompare(b.date));
 
-  // Sauvegarder dans la feuille Snapshots dédiée
+  // Sauvegarder dans la feuille Snapshots (saveSnapshot met à jour si date existe)
   try {
     await gsApi({action:'saveSnapshot', ...snap});
   } catch(e) { console.warn('saveSnapshot:', e); }
