@@ -1209,6 +1209,19 @@ async function actualiserTout() {
   updateDispValues();
   renderPositions(); // Mettre à jour les P&L options aussi
 
+  // ── Snapshot performance quotidien ──
+  // Appelé ici (après loadPerfSnapshots et recalcCompte) pour garantir
+  // que perfSnapshots est chargé et que les valeurs sont à jour
+  if(steps.marche) {
+    const m2 = calcMarge();
+    const fx3 = m2.fx;
+    const qV2=acctQty.VEQT,qX2=acctQty.XEG,qS2=acctQty.SPYM,qC2=acctQty.CBIL,qU2=acctQty.UBIL,qGLD2=acctQty.GLD,qIBIT2=acctQty.IBIT||600;
+    const snapTotal = qV2*(mkt.VEQT||59)/fx3 + qX2*(mkt.XEG||26)/fx3 + qS2*(mkt.SPYM||89)
+                    + qC2*(mkt.CBIL||50)/fx3 + qU2*(mkt.UBIL||50) + qGLD2*(mkt.GLD||398)
+                    + qIBIT2*(mkt.IBIT||35) + m2.cashU + m2.cashC/fx3;
+    maybeSnapshot(snapTotal, Math.round(snapTotal*fx3), m2.margePct, fx3);
+  }
+
   // ── Statut final ──
   const now=new Date();
   const time=now.toLocaleTimeString('fr-CA',{hour:'2-digit',minute:'2-digit'});
@@ -3496,38 +3509,6 @@ function recalcCompte() {
     {l:'P&L actions',          v:(pnlActions>=0?'+':'')+fi(pnlActions)+'$ USD', s:'Gain/perte non réalisé titres', c:pnlActions>=0?'g':'r'},
     {l:'P&L options flottant', v:(pnlOpts>=0?'+':'')+fi(pnlOpts)+'$', s:'Profit non réalisé puts vendus', c:pnlOpts>=0?'g':'r'},
   ];
-  // KPI Ligne 2 — Marge & Capacité (mêmes termes que P1 tableau de bord)
-  var capRest3     = m.capRestante;
-  var margeBrute3  = margeReq + capRest3;
-  var margeDispo2  = capRest3;
-  var margeMax60_2 = Math.max(0, margeBrute3 * 0.60 - margeReq);
-  var notQQQ2 = positions.filter(function(p){return p.ticker==='QQQ'&&p.statut==='short';}).reduce(function(s,p){return s+parseFloat(p.strike)*100*parseInt(p.contrats);},0);
-  var notSPY2 = positions.filter(function(p){return p.ticker==='SPY'&&p.statut==='short';}).reduce(function(s,p){return s+parseFloat(p.strike)*100*parseInt(p.contrats);},0);
-  var notGLD3 = positions.filter(function(p){return p.ticker==='GLD'&&p.statut==='short';}).reduce(function(s,p){return s+parseFloat(p.strike)*100*parseInt(p.contrats);},0);
-  var ratioQS2  = (notQQQ2+notSPY2) / Math.max(1, m.base);
-  var ratioAll2 = notionnel / Math.max(1, m.base);
-  var kpi2 = [
-    {l:'Marge utilisée',
-     v:margePct.toFixed(1)+'%',
-     s:'$'+fi(margeReq)+' USD bloquée / $'+fi(Math.round(capRest3+margeReq))+' USD brute · cible < 60%',
-     c:margePct<40?'g':margePct<60?'a':'r'},
-    {l:'Capacité restante (Disnat)',
-     v:'$'+fi(margeDispo2)+' USD',
-     s:'Marge Disnat calculée · formule exacte (régression VE)',
-     c:margeDispo2>100000?'g':margeDispo2>50000?'a':'r'},
-    {l:'Espace avant seuil 60%',
-     v:'$'+fi(margeMax60_2)+' USD',
-     s:'Brute × 60% − requis = $'+fi(Math.round(margeBrute3*0.6))+' − $'+fi(margeReq)+' USD',
-     c:margeMax60_2>80000?'g':margeMax60_2>20000?'a':'r'},
-    {l:'Notionnel total (QQQ+SPY+GLD)',
-     v:'$'+fi(notionnel)+' USD · '+ratioAll2.toFixed(2)+'×',
-     s:'QQQ $'+fi(notQQQ2)+' · SPY $'+fi(notSPY2)+' · GLD $'+fi(notGLD3)+' · Cible 1.5–3×',
-     c:ratioAll2<=3?'g':ratioAll2<=4?'a':'r'},
-    {l:'Ratio QQQ+SPY',
-     v:ratioQS2.toFixed(2)+'×',
-     s:'$'+fi(notQQQ2+notSPY2)+' / $'+fi(m.base)+' USD · Cible 0.5–2.0×',
-     c:ratioQS2<=2?'g':ratioQS2<=3?'a':'r'},
-  ];
   var mkKpi = function(i){ return '<div class="kpi" style="flex:1;min-width:140px;max-width:200px">'+
     '<div class="kpi-l">'+i.l+'</div>'+
     '<div class="kpi-v'+(i.c?' '+i.c:'')+'">'+i.v+'</div>'+
@@ -3560,9 +3541,6 @@ function recalcCompte() {
   }).join('');
 
   renderActionsTable();
-  // Snapshot automatique quotidien
-  maybeSnapshot(total, totalCAD, margePct, fx2);
-  renderPerfChart();
 }
 
 // ═══ INIT ═══
