@@ -3479,7 +3479,16 @@ function recalcCompte() {
   var valGLD=qGLD*pGLD;
   // Valeur IBIT
   var valIBIT = acctQty.IBIT * (mkt.IBIT||34.85);
-  var total = valV+valX+valS+valC+valU+valGLD+valIBIT+cashU2+cashC2/fx2;
+  // Valeur au marché des options (USD) : short = passif négatif, long = actif positif.
+  // C'est la convention Disnat (valeur des titres = actions NET des options vendues),
+  // distincte du P&L flottant. Σ signe × contrats × prixActuel × 100.
+  var valOpts = positions.reduce(function(s,p){
+    var isLong = p.statut==='long'||p.statut==='long-call';
+    var px     = parseFloat(p.prixActuel)||parseFloat(p.prime)||0;
+    var contr  = Math.abs(parseInt(p.contrats)||0);
+    return s + (isLong?1:-1)*px*100*contr;
+  }, 0);
+  var total = valV+valX+valS+valC+valU+valGLD+valIBIT+valOpts+cashU2+cashC2/fx2;
   var totalCAD = total * fx2;
   // Exposer pour maybeSnapshot (même valeur que les KPIs)
   window._lastTotalUSD = Math.round(total);
@@ -3505,7 +3514,7 @@ function recalcCompte() {
   var pnlActions = window._pnlActionsUSD || 0;
   // KPI Ligne 1 — Valeur & Performance
   var kpi1 = [
-    {l:'Valeur totale compte', v:'$'+fi(totalCAD), s:'~$'+fi(total)+' USD'  , c:'g'},
+    {l:'Valeur totale compte', v:'$'+fi(totalCAD), s:'~$'+fi(total)+' USD · options '+(valOpts>=0?'+':'')+fi(Math.round(valOpts))+'$', c:'g'},
     {l:'Actions USD',          v:'$'+fi(valS+valU+valGLD+valIBIT), s:'SPYM + UBIL.U + GLD + IBIT', c:''},
     {l:'Actions CAD',          v:'$'+fi((valV+valX+valC)*fx2), s:'VEQT + XEG + CBIL · CAD', c:''},
     {l:'Cash USD',             v:'$'+fi(cashU2), s:'Liquidités USD disponibles', c:cashU2>=40000?'g':'a'},
