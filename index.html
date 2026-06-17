@@ -1038,37 +1038,31 @@ async function actualiserTout() {
   try {
     const dl = ms => new Promise(r=>setTimeout(r,ms));
     const fhQ = async s => { try{return await fhGet('/quote?symbol='+s);}catch(e){return{c:0};} };
-    const [q,s,g,v,n,fxF] = await Promise.all([
-      fhQ('QQQ'), fhQ('SPY'), fhQ('GLD'), fhQ('VIX'), fhQ('NVDA'), fhQ('USDCAD=X')
+    const [q,s,g,v,n] = await Promise.all([
+      fhQ('QQQ'), fhQ('SPY'), fhQ('GLD'), fhQ('VIX'), fhQ('NVDA')
     ]);
     if(q.c>0) mkt.QQQ=q.c;
     if(s.c>0) mkt.SPY=s.c;
     if(g.c>0) mkt.GLD=g.c;
     if(v.c>0 && v.c < 80) mkt.VIX=v.c;  // VIX réaliste entre 0 et 80
     if(n.c>0) mkt.NVDA=n.c;
-    if(fxF.c>0) {
-      mkt.USDCAD=fxF.c;
-      const fxInp=document.getElementById('c-fx'); if(fxInp) fxInp.value=fxF.c.toFixed(4);
-      const fxDash=document.getElementById('m-cashcad-fx');
-      if(fxDash) fxDash.textContent='1 USD = '+fxF.c.toFixed(4)+' CAD';
-      saveField('TauxFX', fxF.c.toFixed(4));
-    } else {
-      // Finnhub ne fournit pas le forex en plan gratuit
-      // Fallback 1 : Yahoo Finance via yahooQuote (même fonction que les autres titres)
-      // CAD=X sur Yahoo = valeur de 1 USD en CAD
+    {
+      // FX USD/CAD — frankfurter (BCE) en PRIMAIRE (fiable, sans CORS ni rate-limit),
+      // Yahoo CAD=X en secours seulement. Finnhub ne fournit pas le forex (plan gratuit).
       const fxSources = [
         async () => {
-          const r = await yahooQuote('CAD=X');
-          if(r && r.c > 1.2 && r.c < 1.6) return r.c;
-          return 0;
-        },
-        async () => {
-          // Fallback 2 : frankfurter.app (BCE, sans CORS)
+          // Primaire : frankfurter.app (Banque centrale européenne)
           const r = await fetch('https://api.frankfurter.app/latest?from=USD&to=CAD', {cache:'no-store'});
           if(!r.ok) return 0;
           const d = await r.json();
           const rate = parseFloat(d?.rates?.CAD);
           return (rate > 1.1 && rate < 1.6) ? rate : 0;
+        },
+        async () => {
+          // Secours : Yahoo CAD=X = valeur de 1 USD en CAD
+          const r = await yahooQuote('CAD=X');
+          if(r && r.c > 1.1 && r.c < 1.6) return r.c;
+          return 0;
         },
       ];
       for(const src of fxSources) {
