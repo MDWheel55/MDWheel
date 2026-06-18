@@ -597,6 +597,20 @@ function fxValide(brut, defaut) {
   return r;
 }
 
+// Garde-fou prix d'actions : rejette toute valeur hors plage réaliste par symbole
+// (protège contre l'auto-conversion de Sheets, ex. un prix devenu "2026").
+var PRIX_PLAGE = {
+  QQQ:[200,1200], SPY:[300,1200], GLD:[150,800], NVDA:[50,500],
+  VEQT:[30,120], XEG:[10,60], SPYM:[40,200], CBIL:[40,60], UBIL:[40,60], IBIT:[10,120]
+};
+function prixValide(sym, brut, defaut) {
+  var r = parseFloat(brut);
+  var pl = PRIX_PLAGE[sym];
+  if (!pl) return (isFinite(r) && r > 0) ? r : (defaut || 0);
+  if (isFinite(r) && r >= pl[0] && r <= pl[1]) return r;
+  return (isFinite(defaut) && defaut >= pl[0] && defaut <= pl[1]) ? defaut : (pl[0]+pl[1])/2;
+}
+
 // Alimente acctQty et acctCost à partir de actionsData (Sheets = source de vérité)
 function syncAcctFromActions() {
   actionsData.forEach(a => {
@@ -768,18 +782,18 @@ async function loadAll() {
     if(cpt.PE_QQQ_FWD5) { peData.QQQ.fwdAvg5  = parseFloat(cpt.PE_QQQ_FWD5); var e=document.getElementById('pe-qqq-fwd5'); if(e) e.value=peData.QQQ.fwdAvg5; }
     if(cpt.PE_QQQ_TR)   { peData.QQQ.trail     = parseFloat(cpt.PE_QQQ_TR);   var e=document.getElementById('pe-qqq-trail'); if(e) e.value=peData.QQQ.trail; }
     if(cpt.PE_QQQ_TR5)  { peData.QQQ.trailAvg5 = parseFloat(cpt.PE_QQQ_TR5);  var e=document.getElementById('pe-qqq-trail5');if(e) e.value=peData.QQQ.trailAvg5; }
-    if(cpt.PrixQQQ)  mkt.QQQ  = parseFloat(cpt.PrixQQQ);
-    if(cpt.PrixSPY)  mkt.SPY  = parseFloat(cpt.PrixSPY);
-    if(cpt.PrixGLD)  mkt.GLD  = parseFloat(cpt.PrixGLD);
+    if(cpt.PrixQQQ)  mkt.QQQ  = prixValide('QQQ',  cpt.PrixQQQ,  mkt.QQQ);
+    if(cpt.PrixSPY)  mkt.SPY  = prixValide('SPY',  cpt.PrixSPY,  mkt.SPY);
+    if(cpt.PrixGLD)  mkt.GLD  = prixValide('GLD',  cpt.PrixGLD,  mkt.GLD);
     if(cpt.PrixVIX)  {
       const v=parseFloat(cpt.PrixVIX);
       if(v>=8&&v<=80) mkt.VIX=v;
       else { mkt.VIX=18.68; gsApi({action:'saveCompte',PrixVIX:18.68}).catch(()=>{}); } // corriger Sheets
     }
-    if(cpt.PrixNVDA) mkt.NVDA = parseFloat(cpt.PrixNVDA);
-    if(cpt.PrixVEQT) mkt.VEQT = parseFloat(cpt.PrixVEQT);
-    if(cpt.PrixXEG)  mkt.XEG  = parseFloat(cpt.PrixXEG);
-    if(cpt.PrixSPYM) mkt.SPYM = parseFloat(cpt.PrixSPYM);
+    if(cpt.PrixNVDA) mkt.NVDA = prixValide('NVDA', cpt.PrixNVDA, mkt.NVDA);
+    if(cpt.PrixVEQT) mkt.VEQT = prixValide('VEQT', cpt.PrixVEQT, mkt.VEQT);
+    if(cpt.PrixXEG)  mkt.XEG  = prixValide('XEG',  cpt.PrixXEG,  mkt.XEG);
+    if(cpt.PrixSPYM) mkt.SPYM = prixValide('SPYM', cpt.PrixSPYM, mkt.SPYM);
     if(cpt.PrixIBIT) mkt.IBIT = parseFloat(cpt.PrixIBIT);
     if(cpt.PrixCBIL) mkt.CBIL = parseFloat(cpt.PrixCBIL);
     if(cpt.PrixUBIL) mkt.UBIL = parseFloat(cpt.PrixUBIL);
@@ -1090,11 +1104,11 @@ async function actualiserTout() {
       yahooQuote('IBIT'),    yahooQuote('SPYM'),
       yahooQuote('UBIL')
     ]);
-    if(veqtY.status==='fulfilled'&&veqtY.value.c>0) mkt.VEQT=veqtY.value.c;
-    if(xegY.status==='fulfilled'&&xegY.value.c>0)   mkt.XEG=xegY.value.c;
-    if(ibitY.status==='fulfilled'&&ibitY.value.c>0)  mkt.IBIT=ibitY.value.c;
-    if(spymY.status==='fulfilled'&&spymY.value.c>0)  mkt.SPYM=spymY.value.c;
-    if(ubilY.status==='fulfilled'&&ubilY.value.c>0)  mkt.UBIL=ubilY.value.c;
+    if(veqtY.status==='fulfilled'&&veqtY.value.c>0) mkt.VEQT=prixValide('VEQT',veqtY.value.c,mkt.VEQT);
+    if(xegY.status==='fulfilled'&&xegY.value.c>0)   mkt.XEG=prixValide('XEG',xegY.value.c,mkt.XEG);
+    if(ibitY.status==='fulfilled'&&ibitY.value.c>0)  mkt.IBIT=prixValide('IBIT',ibitY.value.c,mkt.IBIT);
+    if(spymY.status==='fulfilled'&&spymY.value.c>0)  mkt.SPYM=prixValide('SPYM',spymY.value.c,mkt.SPYM);
+    if(ubilY.status==='fulfilled'&&ubilY.value.c>0)  mkt.UBIL=prixValide('UBIL',ubilY.value.c,mkt.UBIL);
     steps.marche = true;
   } catch(e) {
     setStatus('⚠ Prix marché — échec', 'var(--red)');
@@ -2907,10 +2921,11 @@ function renderActionsTable() {
   var actions = Object.keys(grp).map(function(key){
     var g = grp[key];
     var pxAchat = g.qty>0 ? g.cout/g.qty : 0;
+    var pxBrut = mkt[key] || pxDefaut[key] || pxAchat;
     return {
       sym: key, nom: g.nom, dev: g.dev,
       qty: g.qty, pxAchat: pxAchat,
-      pxAct: mkt[key] || pxDefaut[key] || pxAchat,
+      pxAct: prixValide(key, pxBrut, pxDefaut[key] || pxAchat),
       taux: tauxMap[key] || 70, key: key, usd: (g.dev === 'USD')
     };
   });
