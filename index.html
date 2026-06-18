@@ -587,6 +587,16 @@ function symKey(symbole) {
   return symbole.replace(/\.U-C$/i,'').replace(/-[CU]$/i,'').replace(/\.U$/i,'').toUpperCase();
 }
 
+// Garde-fou central du taux USD/CAD : renvoie TOUJOURS une valeur plausible.
+// Si le taux est hors plage réaliste (1,20–1,55), on le REJETTE et on garde le défaut
+// (dernier bon taux). Pas de récupération devinée : un taux faux ne doit jamais s'afficher.
+function fxValide(brut, defaut) {
+  defaut = (defaut && defaut >= 1.20 && defaut <= 1.55) ? defaut : 1.40;
+  var r = parseFloat(brut);
+  if (!isFinite(r) || r < 1.20 || r > 1.55) return defaut;
+  return r;
+}
+
 // Alimente acctQty et acctCost à partir de actionsData (Sheets = source de vérité)
 function syncAcctFromActions() {
   actionsData.forEach(a => {
@@ -773,7 +783,7 @@ async function loadAll() {
     if(cpt.PrixIBIT) mkt.IBIT = parseFloat(cpt.PrixIBIT);
     if(cpt.PrixCBIL) mkt.CBIL = parseFloat(cpt.PrixCBIL);
     if(cpt.PrixUBIL) mkt.UBIL = parseFloat(cpt.PrixUBIL);
-    if(cpt.TauxFX)   mkt.USDCAD = parseFloat(cpt.TauxFX);
+    if(cpt.TauxFX)   mkt.USDCAD = fxValide(cpt.TauxFX, mkt.USDCAD);
     // Restaurer les derniers RSI connus
     if(cpt.RSI_QQQ)  rsiData.QQQ  = parseFloat(cpt.RSI_QQQ);
     if(cpt.RSI_SPY)  rsiData.SPY  = parseFloat(cpt.RSI_SPY);
@@ -1063,14 +1073,15 @@ async function actualiserTout() {
       try {
         const fr = await gsApi({action:'getFX'});
         const rate = parseFloat(fr && fr.rate);
-        if (rate > 1.20 && rate < 1.55) {
+        // N'appliquer QUE si plausible. Sinon on garde le dernier bon taux (pas de 4118, pas de défaut forcé).
+        if (isFinite(rate) && rate >= 1.20 && rate <= 1.55) {
           mkt.USDCAD = rate;
           const fxInp=document.getElementById('c-fx'); if(fxInp) fxInp.value=rate.toFixed(4);
           const fxDash=document.getElementById('m-cashcad-fx');
-          if(fxDash) fxDash.textContent='1 USD = '+rate.toFixed(4)+' CAD';
+          if(fxDash) fxDash.textContent=rate.toFixed(4);
           saveField('TauxFX', rate.toFixed(4));
         }
-        // si le backend échoue, on garde le dernier taux connu (mkt.USDCAD inchangé)
+        // si le backend échoue ou renvoie une valeur aberrante, mkt.USDCAD reste inchangé
       } catch(e) {}
     }
     // TSX + NYSE non-Finnhub via Yahoo
@@ -2791,9 +2802,10 @@ function updateDispValues() {
   const margeEl=document.getElementById('disp-marge');
   const disnat=document.getElementById('disp-marge-disnat');
   const margeDisnat=parseFloat(gv('c-marge','47'));
-  if(fxEl)   fxEl.textContent=(mkt.USDCAD||1.3945).toFixed(4);
+  var fxAff = fxValide(mkt.USDCAD, 1.40);
+  if(fxEl)   fxEl.textContent=fxAff.toFixed(4);
   var cFxEl = document.getElementById('c-fx');
-  if(cFxEl && mkt.USDCAD) cFxEl.value = mkt.USDCAD.toFixed(4);
+  if(cFxEl)  cFxEl.value = fxAff.toFixed(4);
   if(cashU)  cashU.textContent='$'+fi(m.cashU);
   if(cashC)  cashC.textContent='$'+fi(m.cashC)+' CAD';
   // Utiliser la capacité calculée (formule exacte Disnat)
