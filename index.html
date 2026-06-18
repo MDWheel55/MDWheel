@@ -909,12 +909,14 @@ async function parseOCC(occ) {
   };
 }
 
-async function fetchOptPrice(occ) {
+async function fetchOptPrice(occ, statut) {
   const info = await parseOCC(occ);
+  // sens transmis au backend : 'short'/'long' -> évaluation ask (short) ou mid (long), convention Disnat
+  const sens = (String(statut||'').toLowerCase().indexOf('short')===0) ? 'short' : 'long';
 
   // Essai 0: proxy Apps Script (UrlFetchApp côté serveur — aucun CORS, fiable)
   try {
-    const r = await gsApi({action:'getOptionPrice', occ});
+    const r = await gsApi({action:'getOptionPrice', occ, sens});
     if (r && parseFloat(r.price) > 0) return parseFloat(r.price);
   } catch(e) {}
 
@@ -1116,7 +1118,7 @@ async function actualiserTout() {
   for(const p of positions.filter(p=>p.occ&&p.statut!=='stock')) {
     for(let attempt=1; attempt<=2; attempt++) {
       try {
-        const prix = await fetchOptPrice(p.occ);
+        const prix = await fetchOptPrice(p.occ, p.statut);
         if(prix&&prix>0){
           const ancien = parseFloat(p.prixActuel)||prix;
           const deviation = ancien>0 ? Math.abs(prix-ancien)/ancien : 0;
@@ -1237,7 +1239,7 @@ async function refreshOpts() {
   const allOptPos = positions.filter(p => p.occ && p.statut !== 'stock');
   for(const p of allOptPos) {
     try {
-      const prix = await fetchOptPrice(p.occ);
+      const prix = await fetchOptPrice(p.occ, p.statut);
       if (prix && prix > 0) {
         const ancien = parseFloat(p.prixActuel)||prix;
         const deviation = ancien>0 ? Math.abs(prix-ancien)/ancien : 0;
