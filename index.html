@@ -1058,37 +1058,20 @@ async function actualiserTout() {
     if(v.c>0 && v.c < 80) mkt.VIX=v.c;  // VIX réaliste entre 0 et 80
     if(n.c>0) mkt.NVDA=n.c;
     {
-      // FX USD/CAD — frankfurter (BCE) en PRIMAIRE (fiable, sans CORS ni rate-limit),
-      // Yahoo CAD=X en secours seulement. Finnhub ne fournit pas le forex (plan gratuit).
-      const fxSources = [
-        async () => {
-          // Primaire : frankfurter.app (Banque centrale européenne)
-          const r = await fetch('https://api.frankfurter.app/latest?from=USD&to=CAD', {cache:'no-store'});
-          if(!r.ok) return 0;
-          const d = await r.json();
-          const rate = parseFloat(d?.rates?.CAD);
-          return (rate > 1.1 && rate < 1.6) ? rate : 0;
-        },
-        async () => {
-          // Secours : Yahoo CAD=X = valeur de 1 USD en CAD
-          const r = await yahooQuote('CAD=X');
-          if(r && r.c > 1.1 && r.c < 1.6) return r.c;
-          return 0;
-        },
-      ];
-      for(const src of fxSources) {
-        try {
-          const rate = await src();
-          if(rate > 0) {
-            mkt.USDCAD = rate;
-            const fxInp=document.getElementById('c-fx'); if(fxInp) fxInp.value=rate.toFixed(4);
-            const fxDash=document.getElementById('m-cashcad-fx');
-            if(fxDash) fxDash.textContent='1 USD = '+rate.toFixed(4)+' CAD';
-            saveField('TauxFX', rate.toFixed(4));
-            break;
-          }
-        } catch(e) {}
-      }
+      // FX USD/CAD via le BACKEND (getFX) — côté serveur, comme les options.
+      // Pas de CORS, pas de course Promise.all : Yahoo CAD=X primaire, frankfurter en repli.
+      try {
+        const fr = await gsApi({action:'getFX'});
+        const rate = parseFloat(fr && fr.rate);
+        if (rate > 1.20 && rate < 1.55) {
+          mkt.USDCAD = rate;
+          const fxInp=document.getElementById('c-fx'); if(fxInp) fxInp.value=rate.toFixed(4);
+          const fxDash=document.getElementById('m-cashcad-fx');
+          if(fxDash) fxDash.textContent='1 USD = '+rate.toFixed(4)+' CAD';
+          saveField('TauxFX', rate.toFixed(4));
+        }
+        // si le backend échoue, on garde le dernier taux connu (mkt.USDCAD inchangé)
+      } catch(e) {}
     }
     // TSX + NYSE non-Finnhub via Yahoo
     const [veqtY,xegY,ibitY,spymY,ubilY] = await Promise.allSettled([
