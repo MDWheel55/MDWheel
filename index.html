@@ -2318,19 +2318,27 @@ async function fermerPos(id) {
   }
 
   // typeFerm === '1' : RACHAT (BTC) — comportement par défaut
-  const pc  = ppct(prime, parseFloat(p.prixActuel));
-  // P&L net = (prime − coût rachat) × 100 × contrats − frais
-  const pnlBrut = (prime - parseFloat(p.prixActuel)) * 100 * contr;
-  const pnl = Math.round(pnlBrut - frais);
-  const coutRachat = Math.round(parseFloat(p.prixActuel) * 100 * contr);
-  if (!confirm('Racheter à ' + pc + '% de profit?\nP&L net (frais $' + fi(frais) + ' déduits): $' + fi(pnl) + '\nCoût rachat: $' + fi(coutRachat) + ' USD')) return;
   const isLong = String(p.statut||'').indexOf('long') === 0;
   const closeOp = isLong ? 'STC' : 'BTC';
+  // Prix de cloture REEL, saisi a la main (ta transaction Disnat). Defaut = dernier prix live.
+  const prixDefaut = (parseFloat(p.prixActuel) || prime || 0).toFixed(2);
+  const prixStr = prompt((isLong ? 'Prix de VENTE reel' : 'Prix de RACHAT reel') + ' ($ USD) ?  Le prix de TA transaction chez Disnat, pas le prix du marche live.', prixDefaut);
+  if (prixStr === null) return;
+  const prixClot = parseFloat(prixStr);
+  if (isNaN(prixClot) || prixClot < 0) { alert('Prix invalide — fermeture annulee.'); return; }
+
+  const pc = ppct(prime, prixClot);
+  // P&L net : short = (prime − rachat) ; long = (vente − prime) ; x100 x contrats, moins frais.
+  const pnlBrut = isLong ? (prixClot - prime) * 100 * contr : (prime - prixClot) * 100 * contr;
+  const pnl = Math.round(pnlBrut - frais);
+  const coutClot = Math.round(prixClot * 100 * contr);
+  const libCout = isLong ? 'Produit de vente' : 'Cout de rachat';
+  if (!confirm((isLong ? 'Vendre (STC)' : 'Racheter (BTC)') + ' a $' + prixClot.toFixed(2) + ' (' + pc + '% de profit) ?  P&L net frais deduits : $' + fi(pnl) + '  ·  ' + libCout + ' : $' + fi(coutClot) + ' USD')) return;
   await gsApi({action:'saveTrade', date:closDate, operation:closeOp, ticker:p.ticker, type:p.type,
     strike:p.strike, expiration:p.expiration,
-    contrats:p.contrats, prix:p.prixActuel, frais:frais, occ:p.occ});
+    contrats:p.contrats, prix:prixClot, frais:frais, occ:p.occ});
   await loadAll();
-  setSyncStatus(true, '✓ ' + (isLong ? 'Vendu (STC)' : 'Racheté (BTC)') + ' — P&L: $' + fi(pnl));
+  setSyncStatus(true, '✓ ' + (isLong ? 'Vendu (STC)' : 'Rachete (BTC)') + ' — P&L: $' + fi(pnl));
 }
 
 async function updatePrix(id, val) {
