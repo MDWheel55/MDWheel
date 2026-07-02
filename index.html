@@ -1068,19 +1068,32 @@ async function actualiserTout() {
   const steps = {marche:false, rsi:false, options:false, sheets:false};
   let optOk=0, optErr=0;
 
-  // ── 1. Prix marché (Finnhub + Yahoo TSX) ──
+  // ── 1. Prix marché (MarketData US + Yahoo TSX) ──
   setStatus('1/4 Prix marché...');
   try {
     const dl = ms => new Promise(r=>setTimeout(r,ms));
-    const fhQ = async s => { try{return await fhGet('/quote?symbol='+s);}catch(e){return{c:0};} };
-    const [q,s,g,v,n] = await Promise.all([
-      fhQ('QQQ'), fhQ('SPY'), fhQ('GLD'), fhQ('VIX'), fhQ('NVDA')
+    // Spot US via MarketData (serveur, même token que les options), repli Yahoo automatique.
+    const mdStock = async s => {
+      try { const r = await gsApi({action:'getStockPrice', symbol:s});
+            const px = parseFloat(r && r.price); if (isFinite(px) && px > 0) return { c: px }; } catch(e) {}
+      return { c: 0 };
+    };
+    const usQuote = async s => {
+      const m = await mdStock(s); if (m.c > 0) return m;                             // MarketData d'abord
+      try { const y = await yahooQuote(s); if (y && y.c > 0) return y; } catch(e) {} // repli Yahoo
+      return { c: 0 };
+    };
+    // QQQ/SPY/GLD/NVDA/IBIT = cotés aux US -> MarketData ; VIX -> Yahoo (^VIX).
+    const [q,s,g,n,ibit,v] = await Promise.all([
+      usQuote('QQQ'), usQuote('SPY'), usQuote('GLD'), usQuote('NVDA'), usQuote('IBIT'),
+      yahooQuote('VIX').catch(()=>({c:0}))
     ]);
     if(q.c>0) mkt.QQQ=q.c;
     if(s.c>0) mkt.SPY=s.c;
     if(g.c>0) mkt.GLD=g.c;
-    if(v.c>0 && v.c < 80) mkt.VIX=v.c;  // VIX réaliste entre 0 et 80
     if(n.c>0) mkt.NVDA=n.c;
+    if(ibit.c>0) mkt.IBIT=prixValide('IBIT',ibit.c,mkt.IBIT);
+    if(v.c>0 && v.c < 80) mkt.VIX=v.c;  // VIX réaliste entre 0 et 80
     {
       // FX USD/CAD via le BACKEND (getFX) — côté serveur, comme les options.
       // Pas de CORS, pas de course Promise.all : Yahoo CAD=X primaire, frankfurter en repli.
@@ -1098,15 +1111,13 @@ async function actualiserTout() {
         // si le backend échoue ou renvoie une valeur aberrante, mkt.USDCAD reste inchangé
       } catch(e) {}
     }
-    // TSX + NYSE non-Finnhub via Yahoo
-    const [veqtY,xegY,ibitY,spymY,ubilY] = await Promise.allSettled([
+    // TSX (cotés à Toronto, même en USD) via Yahoo — IBIT est passé sur MarketData ci-dessus.
+    const [veqtY,xegY,spymY,ubilY] = await Promise.allSettled([
       yahooQuote('VEQT.TO'), yahooQuote('XEG.TO'),
-      yahooQuote('IBIT'),    yahooQuote('SPYM'),
-      yahooQuote('UBIL')
+      yahooQuote('SPYM'),    yahooQuote('UBIL')
     ]);
     if(veqtY.status==='fulfilled'&&veqtY.value.c>0) mkt.VEQT=prixValide('VEQT',veqtY.value.c,mkt.VEQT);
     if(xegY.status==='fulfilled'&&xegY.value.c>0)   mkt.XEG=prixValide('XEG',xegY.value.c,mkt.XEG);
-    if(ibitY.status==='fulfilled'&&ibitY.value.c>0)  mkt.IBIT=prixValide('IBIT',ibitY.value.c,mkt.IBIT);
     if(spymY.status==='fulfilled'&&spymY.value.c>0)  mkt.SPYM=prixValide('SPYM',spymY.value.c,mkt.SPYM);
     if(ubilY.status==='fulfilled'&&ubilY.value.c>0)  mkt.UBIL=prixValide('UBIL',ubilY.value.c,mkt.UBIL);
     steps.marche = true;
