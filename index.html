@@ -1083,9 +1083,9 @@ async function actualiserTout() {
       try { const y = await yahooQuote(s); if (y && y.c > 0) return y; } catch(e) {} // repli Yahoo
       return { c: 0 };
     };
-    // QQQ/SPY/GLD/NVDA/IBIT = cotés aux US -> MarketData ; VIX -> Yahoo (^VIX).
-    const [q,s,g,n,ibit,v] = await Promise.all([
-      usQuote('QQQ'), usQuote('SPY'), usQuote('GLD'), usQuote('NVDA'), usQuote('IBIT'),
+    // QQQ/SPY/GLD/NVDA/IBIT/SPYM = cotés aux US -> MarketData ; VIX -> Yahoo (^VIX).
+    const [q,s,g,n,ibit,spym,v] = await Promise.all([
+      usQuote('QQQ'), usQuote('SPY'), usQuote('GLD'), usQuote('NVDA'), usQuote('IBIT'), usQuote('SPYM'),
       yahooQuote('VIX').catch(()=>({c:0}))
     ]);
     if(q.c>0) mkt.QQQ=q.c;
@@ -1093,6 +1093,7 @@ async function actualiserTout() {
     if(g.c>0) mkt.GLD=g.c;
     if(n.c>0) mkt.NVDA=n.c;
     if(ibit.c>0) mkt.IBIT=prixValide('IBIT',ibit.c,mkt.IBIT);
+    if(spym.c>0) mkt.SPYM=prixValide('SPYM',spym.c,mkt.SPYM);
     if(v.c>0 && v.c < 80) mkt.VIX=v.c;  // VIX réaliste entre 0 et 80
     {
       // FX USD/CAD via le BACKEND (getFX) — côté serveur, comme les options.
@@ -1111,14 +1112,12 @@ async function actualiserTout() {
         // si le backend échoue ou renvoie une valeur aberrante, mkt.USDCAD reste inchangé
       } catch(e) {}
     }
-    // TSX (cotés à Toronto, même en USD) via Yahoo — IBIT est passé sur MarketData ci-dessus.
-    const [veqtY,xegY,spymY,ubilY] = await Promise.allSettled([
-      yahooQuote('VEQT.TO'), yahooQuote('XEG.TO'),
-      yahooQuote('SPYM'),    yahooQuote('UBIL')
+    // TSX (cotés à Toronto) via Yahoo — IBIT et SPYM sont passés sur MarketData ci-dessus.
+    const [veqtY,xegY,ubilY] = await Promise.allSettled([
+      yahooQuote('VEQT.TO'), yahooQuote('XEG.TO'), yahooQuote('UBIL')
     ]);
     if(veqtY.status==='fulfilled'&&veqtY.value.c>0) mkt.VEQT=prixValide('VEQT',veqtY.value.c,mkt.VEQT);
     if(xegY.status==='fulfilled'&&xegY.value.c>0)   mkt.XEG=prixValide('XEG',xegY.value.c,mkt.XEG);
-    if(spymY.status==='fulfilled'&&spymY.value.c>0)  mkt.SPYM=prixValide('SPYM',spymY.value.c,mkt.SPYM);
     if(ubilY.status==='fulfilled'&&ubilY.value.c>0)  mkt.UBIL=prixValide('UBIL',ubilY.value.c,mkt.UBIL);
     steps.marche = true;
   } catch(e) {
