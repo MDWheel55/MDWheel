@@ -18,7 +18,7 @@
   --amber:#ffb830;--amber-bg:rgba(255,184,48,0.06);--amber-bd:rgba(255,184,48,0.2);
   --red:#ff4d6d;--red-bg:rgba(255,77,109,0.06);--red-bd:rgba(255,77,109,0.2);
   --blue:#4d9fff;--blue-bg:rgba(77,159,255,0.06);--blue-bd:rgba(77,159,255,0.2);
-  --qqq:#b48eff;--spy:#00e5a0;--gld:#ffb830;
+  --qqq:#b48eff;--spy:#00e5a0;--gld:#ffb830;--xeg:#ff7043;
   --syne:'Syne',sans-serif;--mono:'Space Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -103,6 +103,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 .ts{background:rgba(0,229,160,0.12);color:var(--spy);}
 .tg{background:rgba(255,184,48,0.12);color:var(--gld);}
 .tn{background:rgba(77,159,255,0.12);color:var(--blue);}
+.tx{background:rgba(255,112,67,0.12);color:var(--xeg);}
 .prog{display:flex;align-items:center;gap:5px;}
 .pbg{height:3px;width:50px;background:var(--s3);border-radius:2px;overflow:hidden;}
 .pf{height:3px;border-radius:2px;}
@@ -497,7 +498,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </div>
     <div id="f-section-option">
     <div class="fgrid">
-      <div class="ff"><label>Sous-jacent</label><select id="f-ticker"><option>QQQ</option><option>SPY</option><option>GLD</option><option>NVDA</option></select></div>
+      <div class="ff"><label>Sous-jacent</label><select id="f-ticker"><option>QQQ</option><option>SPY</option><option>GLD</option><option>NVDA</option><option>XEG</option></select></div>
       <div class="ff"><label>Type</label><select id="f-type"><option value="PUT">PUT</option><option value="CALL">CALL</option></select></div>
       <div class="ff"><label>Strike ($)</label><input type="number" id="f-strike" value="490"></div>
       <div class="ff"><label>Expiration</label><input type="date" id="f-exp" onchange="calcDTE()"></div>
@@ -671,11 +672,19 @@ function showTab(name, el) {
 }
 
 // ═══ GOOGLE SHEETS ═══
-async function gsApi(params) {
+async function gsApi(params, _retry) {
   try {
     const url = SCRIPT_URL + '?' + new URLSearchParams(params).toString();
     const res = await fetch(url);
-    const data = await res.json();
+    const text = await res.text();
+    // Apps Script renvoie parfois une page HTML (throttle/quota/redirection Google)
+    // au lieu du JSON attendu — on ne plante pas sur "<!DOCTYPE ...".
+    if (text.charAt(0) === '<') {
+      if (!_retry) { await new Promise(r => setTimeout(r, 800)); return gsApi(params, true); }
+      setSyncStatus(false, '⚠ Google a renvoyé une page HTML (throttle) — réessaie dans un instant');
+      return null;
+    }
+    const data = JSON.parse(text);
     if (!data.ok) throw new Error(data.error || 'Erreur Sheets');
     return data.data;
   } catch(e) {
@@ -1490,7 +1499,7 @@ function posRow(p, showOcc) {
     ? (pc>=0?'var(--green)':'var(--red)')
     : (pc>=75?'var(--green)':pc>=60?'#7ddc8a':pc>=40?'var(--amber)':pc>=20?'#e8a030':'var(--dim)');
   const qstr = isLong ? '+'+p.contrats : '−'+p.contrats;
-  const tc = p.ticker==='QQQ'?'tq':p.ticker==='SPY'?'ts':p.ticker==='GLD'?'tg':'tn';
+  const tc = p.ticker==='QQQ'?'tq':p.ticker==='SPY'?'ts':p.ticker==='GLD'?'tg':p.ticker==='XEG'?'tx':'tn';
   // P&L en dollars
   const contr  = Math.abs(parseInt(p.contrats)||1);
   const pnlDol = isLong
@@ -1693,7 +1702,7 @@ function renderPnlRealized() {
       totPnl += pnl;
       const imp = Math.round(pnl * 0.5);
       const fermLabel = {BTC:'Rachat',STC:'Vente',EXP:'Expiration'}[t.action] || t.action;
-      const tkCls = t.ticker==='QQQ'?'tq':t.ticker==='SPY'?'ts':t.ticker==='GLD'?'tg':'tn';
+      const tkCls = t.ticker==='QQQ'?'tq':t.ticker==='SPY'?'ts':t.ticker==='GLD'?'tg':t.ticker==='XEG'?'tx':'tn';
       return '<tr>'
         + '<td style="font-size:10px">'+t.date+'</td>'
         + '<td><span class="tk '+tkCls+'">'+t.ticker+'</span></td>'
@@ -1818,7 +1827,7 @@ function renderTrades(rawTrades) {
   trades.sort((a,b) => (b.date > a.date ? 1 : -1));
   body.innerHTML = trades.length
     ? trades.map(t => {
-        const tkCls = t.ticker==='QQQ'?'tq':t.ticker==='SPY'?'ts':t.ticker==='GLD'?'tg':'tn';
+        const tkCls = t.ticker==='QQQ'?'tq':t.ticker==='SPY'?'ts':t.ticker==='GLD'?'tg':t.ticker==='XEG'?'tx':'tn';
         // STO/BTO = ouverture (vert), BTC/STC/EXP = fermeture, ASSIGN = neutre
         const a = t.action;
         const actCls = (a==='STO'||a==='BTO')?'tgd':(a==='BTC'||a==='STC')?'tga':(a==='EXP')?'tgg':'tgb';
@@ -2875,7 +2884,7 @@ function renderTradesActions(rawTrades) {
     const opCol = op === 'ACHAT' ? 'var(--red)' : 'var(--green)';
     const opBg  = op === 'ACHAT' ? 'rgba(255,77,109,0.15)' : 'rgba(0,229,160,0.15)';
     const montant = parseFloat(t.montant)||0;
-    const tkCls = {QQQ:'var(--qqq)',SPY:'var(--spy)',GLD:'var(--gld)',NVDA:'var(--nvda)'}[t.symbole] || 'var(--fg)';
+    const tkCls = {QQQ:'var(--qqq)',SPY:'var(--spy)',GLD:'var(--gld)',NVDA:'var(--nvda)',XEG:'var(--xeg)'}[t.symbole] || 'var(--fg)';
     return '<tr>'+
       '<td style="font-size:10px;color:var(--muted)">'+(t.date||'')+'</td>'+
       '<td style="font-weight:600;font-family:var(--mono);color:'+tkCls+'">'+(t.symbole||'')+'</td>'+
