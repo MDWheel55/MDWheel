@@ -309,20 +309,30 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
 
   <div class="sec" style="display:flex;align-items:center;justify-content:space-between">
-    <span>P&L RÉALISÉ — ACTIONS</span>
+    <span>P&L RÉALISÉ — ACTIONS CAD</span>
     <div style="display:flex;gap:6px">
-      <button class="btn btn-d" id="pnl-act-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPnlActView('mois')">Mensuel</button>
-      <button class="btn btn-d" id="pnl-act-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPnlActView('annee')">Annuel</button>
-      <button class="btn btn-d" id="pnl-act-v-pos"   style="padding:3px 10px;font-size:10px" onclick="setPnlActView('position')">Par position</button>
+      <button class="btn btn-d" id="pnl-act-v-mois"     style="padding:3px 10px;font-size:10px" onclick="setPnlActView('mois')">Mensuel</button>
+      <button class="btn btn-d" id="pnl-act-v-annee"    style="padding:3px 10px;font-size:10px" onclick="setPnlActView('annee')">Annuel</button>
+      <button class="btn btn-d" id="pnl-act-v-position" style="padding:3px 10px;font-size:10px" onclick="setPnlActView('position')">Par position</button>
     </div>
   </div>
-  <div class="pwrap" style="margin-bottom:1.5rem">
+  <div class="pwrap" style="margin-bottom:1rem">
     <table class="ptbl">
-      <thead id="pnl-act-head"></thead>
-      <tbody id="pnl-act-body"></tbody>
-      <tfoot id="pnl-act-foot"></tfoot>
+      <thead id="pnl-act-cad-head"></thead>
+      <tbody id="pnl-act-cad-body"></tbody>
+      <tfoot id="pnl-act-cad-foot"></tfoot>
     </table>
   </div>
+
+  <div class="sec">P&L RÉALISÉ — ACTIONS USD <span style="color:var(--muted);font-weight:400">· équiv. CAD au taux du jour du trade (BCE)</span></div>
+  <div class="pwrap" style="margin-bottom:0.75rem">
+    <table class="ptbl">
+      <thead id="pnl-act-usd-head"></thead>
+      <tbody id="pnl-act-usd-body"></tbody>
+      <tfoot id="pnl-act-usd-foot"></tfoot>
+    </table>
+  </div>
+  <div id="pnl-act-resume" style="margin-bottom:1.5rem"></div>
 
   <div class="sec">HISTORIQUE DES TRANSACTIONS — ACTIONS</div>
   <div class="pwrap">
@@ -3030,6 +3040,8 @@ function renderTradesActions(rawTrades) {
   // Alimenter le cache pour renderPnlActRealized
   window._tradesActCache = trades;
   renderPnlActRealized();
+  // Charger les taux FX historiques des ventes USD (async — re-rendra le P&L une fois reçus)
+  chargerFXHistorique();
   if (trades.length === 0) {
     body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr>';
     return;
@@ -3118,6 +3130,9 @@ function renderActionsTable() {
 
   var totalUSD=0, totalEmprUSD=0, totalPnlUSD=0;
   var rowsCAD=[], rowsUSD=[];
+  // Sous-totaux par section (dans la devise de la section)
+  var totSecCAD = {val:0, cout:0, pnl:0, empr:0};
+  var totSecUSD = {val:0, cout:0, pnl:0, empr:0};
 
   actions.forEach(function(a) {
     var coutTot  = a.qty * a.pxAchat;
@@ -3131,6 +3146,8 @@ function renderActionsTable() {
     totalUSD    += valUSD;
     totalEmprUSD+= emprUSD;
     totalPnlUSD += pnlUSD;
+    var sec = a.usd ? totSecUSD : totSecCAD;
+    sec.val += valMkt; sec.cout += coutTot; sec.pnl += pnlDol; sec.empr += empr;
 
     var pnlCol  = pnlDol>=0?'var(--green)':'var(--red)';
     var colDev  = a.dev==='CAD'?'var(--blue)':'var(--amber)';
@@ -3176,7 +3193,23 @@ function renderActionsTable() {
   // Séparateur section
   var secRow = function(lbl,col){ return '<tr><td colspan="11" style="padding:6px 8px;font-family:var(--mono);font-size:8px;color:'+col+';letter-spacing:0.1em;background:var(--s2);border-top:2px solid var(--border)">'+lbl+'</td></tr>'; };
 
-  tbody.innerHTML = secRow('ACTIONS CAD','var(--blue)')+rowsCAD.join('')+secRow('ACTIONS USD','var(--amber)')+rowsUSD.join('');
+  // Sous-total de section (dans la devise native de la section)
+  var sousTotalRow = function(lbl, t, dev, col){
+    var pct  = t.cout>0 ? (t.pnl/t.cout*100) : 0;
+    var pCol = t.pnl>=0?'var(--green)':'var(--red)';
+    return '<tr style="background:var(--s2)">'+
+      '<td colspan="6" style="padding:7px 8px;font-family:var(--mono);font-size:10px;color:'+col+';font-weight:700;letter-spacing:0.05em">'+lbl+'</td>'+
+      '<td style="text-align:right;font-family:var(--mono);font-weight:700">$'+fi(t.val)+' '+dev+'</td>'+
+      '<td style="text-align:right;font-family:var(--mono);font-weight:700;color:'+pCol+'">'+(t.pnl>=0?'+':'')+fi(t.pnl)+'$</td>'+
+      '<td style="text-align:right;font-family:var(--mono);font-weight:700;color:'+pCol+'">'+(pct>=0?'+':'')+pct.toFixed(2)+'%</td>'+
+      '<td></td>'+
+      '<td style="text-align:right;font-family:var(--mono);font-weight:700;color:var(--green)">$'+fi(t.empr)+' '+dev+'</td>'+
+    '</tr>';
+  };
+
+  tbody.innerHTML =
+    secRow('ACTIONS CAD','var(--blue)')+rowsCAD.join('')+sousTotalRow('TOTAL CAD', totSecCAD, 'CAD', 'var(--blue)')+
+    secRow('ACTIONS USD','var(--amber)')+rowsUSD.join('')+sousTotalRow('TOTAL USD', totSecUSD, 'USD', 'var(--amber)');
 
   if(tfoot) tfoot.innerHTML =
     '<tr style="border-top:2px solid var(--border)">'+
@@ -3203,19 +3236,61 @@ function setPnlActView(v) {
   renderPnlActRealized();
 }
 
+// ── FX historique (taux du jour du trade, pour conversion USD→CAD déclarable) ──
+// Cache client alimenté par l'action getFXHistoriques (frankfurter/BCE + feuille FX_Historique).
+window._fxHist = window._fxHist || {};
+let _fxHistEnCours = false;
+
+// Devise d'un trade action : colonne Devise en priorité, sinon inférence par symbole.
+function devTradeAction(t) {
+  const d = String(t.devise||'').toUpperCase();
+  if (d === 'CAD' || d === 'USD') return d;
+  const sym = String(t.symbole||'').toUpperCase();
+  return /^(CBIL|VEQT|XEG)/.test(sym) ? 'CAD' : 'USD';
+}
+
+async function chargerFXHistorique() {
+  if (_fxHistEnCours) return;
+  const trades = window._tradesActCache || [];
+  const manquantes = [...new Set(trades
+    .filter(t => (t.operation||'').toUpperCase() === 'VENTE' && devTradeAction(t) === 'USD')
+    .map(t => t.date)
+    .filter(d => d && !window._fxHist[d]))];
+  if (!manquantes.length) return;
+  _fxHistEnCours = true;
+  try {
+    const r = await gsApi({action:'getFXHistoriques', dates: manquantes.join(',')});
+    if (r && r.rates) {
+      Object.keys(r.rates).forEach(d => { window._fxHist[d] = r.rates[d]; });
+      renderPnlActRealized();
+    }
+  } finally { _fxHistEnCours = false; }
+}
+
 function renderPnlActRealized() {
-  const head = document.getElementById('pnl-act-head');
-  const body = document.getElementById('pnl-act-body');
-  const foot = document.getElementById('pnl-act-foot');
-  if (!head || !body) return;
+  const headC = document.getElementById('pnl-act-cad-head');
+  const bodyC = document.getElementById('pnl-act-cad-body');
+  const footC = document.getElementById('pnl-act-cad-foot');
+  const headU = document.getElementById('pnl-act-usd-head');
+  const bodyU = document.getElementById('pnl-act-usd-body');
+  const footU = document.getElementById('pnl-act-usd-foot');
+  const resume = document.getElementById('pnl-act-resume');
+  if (!headC || !bodyC || !headU || !bodyU) return;
 
   // Trades actions depuis tradesActCache (chargé avec getTradesActions)
   const trades = (window._tradesActCache || []);
-  const achats  = trades.filter(t => (t.operation||'').toUpperCase() === 'ACHAT');
-  const ventes  = trades.filter(t => (t.operation||'').toUpperCase() === 'VENTE');
+  const fxJour = mkt.USDCAD || parseFloat(gv('c-fx','1.397'));
 
-  // Registre des coûts moyens pondérés par symbole
-  // On construit le coût moyen en traitant les trades dans l'ordre chronologique
+  // FX du jour du trade : cache historique en priorité, repli taux du jour (marqué *)
+  function fxDe(date) {
+    const h = window._fxHist[date];
+    if (h && h.rate > 0) return { rate: h.rate, approx: (h.src === 'jour') };
+    return { rate: fxJour, approx: true };
+  }
+
+  // Registre des coûts moyens pondérés par symbole, dans l'ordre chronologique.
+  // Un symbole vit dans une seule devise : les registres CAD/USD ne se mélangent pas.
+  const costAtVente = {};
   const costBook = {};
   const tradesSorted = [...trades].sort((a,b) => (a.date||'').localeCompare(b.date||''));
   tradesSorted.forEach(t => {
@@ -3228,36 +3303,15 @@ function renderPnlActRealized() {
       costBook[sym].totalCost += px * qty;
       costBook[sym].totalQty  += qty;
     } else if (op === 'VENTE') {
-      // Réduire la position (coût moyen inchangé sur les unités restantes)
-      const nb = Math.min(qty, costBook[sym].totalQty);
       const coutMoy = costBook[sym].totalQty > 0 ? costBook[sym].totalCost / costBook[sym].totalQty : 0;
+      costAtVente[t.tradeId || (sym+t.date)] = coutMoy;
+      const nb = Math.min(qty, costBook[sym].totalQty);
       costBook[sym].totalCost -= coutMoy * nb;
       costBook[sym].totalQty  -= nb;
     }
   });
 
-  // P&L d'une vente = (prix_vente − coût_moyen_au_moment_vente) × quantité
-  // On recalcule avec le coût moyen reconstruit proprement
-  const costAtVente = {};
-  const costBookV = {}; // reconstruction pour les ventes dans l'ordre
-  tradesSorted.forEach(t => {
-    const op  = (t.operation||'').toUpperCase();
-    const sym = t.symbole;
-    const qty = Math.abs(parseFloat(t.quantite)||0);
-    const px  = Math.abs(parseFloat(t.prix)||0);
-    if (!costBookV[sym]) costBookV[sym] = {totalCost:0, totalQty:0};
-    if (op === 'ACHAT') {
-      costBookV[sym].totalCost += px * qty;
-      costBookV[sym].totalQty  += qty;
-    } else if (op === 'VENTE') {
-      const coutMoy = costBookV[sym].totalQty > 0 ? costBookV[sym].totalCost / costBookV[sym].totalQty : 0;
-      costAtVente[t.tradeId || (sym+t.date)] = coutMoy;
-      const nb = Math.min(qty, costBookV[sym].totalQty);
-      costBookV[sym].totalCost -= coutMoy * nb;
-      costBookV[sym].totalQty  -= nb;
-    }
-  });
-
+  // P&L d'une vente = (prix_vente − coût_moyen_au_moment_vente) × quantité − frais
   function pnlVente(t) {
     const qty     = Math.abs(parseFloat(t.quantite)||0);
     const pxVente = Math.abs(parseFloat(t.prix)||0);
@@ -3266,74 +3320,174 @@ function renderPnlActRealized() {
     return Math.round((pxVente - coutMoy) * qty - frais);
   }
 
-  const empty = () => '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune vente enregistrée — le P&L se réalise à la vente d\'actions</td></tr>';
+  // Séparation par devise de règlement
+  const tCAD = trades.filter(t => devTradeAction(t) === 'CAD');
+  const tUSD = trades.filter(t => devTradeAction(t) === 'USD');
+  const ventesCAD = tCAD.filter(t => (t.operation||'').toUpperCase() === 'VENTE');
+  const ventesUSD = tUSD.filter(t => (t.operation||'').toUpperCase() === 'VENTE');
 
+  // Totaux globaux (pour le résumé déclarable)
+  let totPnlCAD = 0, totPnlUSD = 0, totEquivCAD = 0, fxApprox = false;
+  ventesCAD.forEach(t => { totPnlCAD += pnlVente(t); });
+  ventesUSD.forEach(t => {
+    const p = pnlVente(t), f = fxDe(t.date);
+    totPnlUSD += p;
+    totEquivCAD += p * f.rate;
+    if (f.approx) fxApprox = true;
+  });
+
+  const vide = (cols, msg) => '<tr><td colspan="'+cols+'" style="text-align:center;color:var(--muted);padding:1.5rem">'+msg+'</td></tr>';
+  const msgVide = 'Aucune vente enregistrée — le P&L se réalise à la vente d\'actions';
+
+  // ── Vue PAR POSITION ──────────────────────────────────────────────────────
   if (pnlActView === 'position') {
-    head.innerHTML = '<tr><th>DATE</th><th>SYMBOLE</th><th style="text-align:right">QTÉ VENDUE</th><th style="text-align:right">P&L RÉALISÉ</th></tr>';
-    if (!ventes.length) { body.innerHTML = empty(); foot.innerHTML=''; return; }
-    let tot = 0;
-    const sorted = [...ventes].sort((a,b)=>b.date.localeCompare(a.date));
-    body.innerHTML = sorted.map(t => {
-      const pnl = pnlVente(t);
-      tot += pnl;
-      const col = pnl>=0?'var(--green)':'var(--red)';
-      return `<tr>
-        <td style="font-size:10px;color:var(--muted)">${t.date}</td>
-        <td style="font-weight:600;font-family:var(--mono)">${t.symbole}</td>
-        <td style="text-align:right;font-family:var(--mono)">${fi(Math.abs(parseFloat(t.quantite)))}</td>
-        <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${pnl>=0?'+':''}${fi(pnl)}$</td>
+    // Table CAD
+    headC.innerHTML = '<tr><th>DATE</th><th>SYMBOLE</th><th style="text-align:right">QTÉ VENDUE</th><th style="text-align:right">P&L RÉALISÉ CAD</th></tr>';
+    if (!ventesCAD.length) { bodyC.innerHTML = vide(4, msgVide); footC.innerHTML=''; }
+    else {
+      const sc = [...ventesCAD].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+      bodyC.innerHTML = sc.map(t => {
+        const pnl = pnlVente(t), col = pnl>=0?'var(--green)':'var(--red)';
+        return `<tr>
+          <td style="font-size:10px;color:var(--muted)">${t.date}</td>
+          <td style="font-weight:600;font-family:var(--mono)">${t.symbole}</td>
+          <td style="text-align:right;font-family:var(--mono)">${fi(Math.abs(parseFloat(t.quantite)||0))}</td>
+          <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${pnl>=0?'+':''}${fi(pnl)}$ CAD</td>
+        </tr>`;
+      }).join('');
+      footC.innerHTML = `<tr style="border-top:2px solid var(--border)">
+        <td colspan="3" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL P&L RÉALISÉ CAD</td>
+        <td style="text-align:right;font-weight:700;font-family:var(--mono);color:${totPnlCAD>=0?'var(--green)':'var(--red)'}">${totPnlCAD>=0?'+':''}${fi(totPnlCAD)}$ CAD</td>
       </tr>`;
-    }).join('');
-    foot.innerHTML = `<tr style="border-top:2px solid var(--border)">
-      <td colspan="3" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL P&L RÉALISÉ</td>
-      <td style="text-align:right;font-weight:700;color:${tot>=0?'var(--green)':'var(--red)'}">${tot>=0?'+':''}${fi(tot)}$</td>
-    </tr>`;
+    }
+    // Table USD avec équiv. CAD au FX du jour du trade
+    headU.innerHTML = '<tr><th>DATE</th><th>SYMBOLE</th><th style="text-align:right">QTÉ VENDUE</th><th style="text-align:right">P&L RÉALISÉ USD</th><th style="text-align:right">FX JOUR</th><th style="text-align:right">ÉQUIV. CAD</th></tr>';
+    if (!ventesUSD.length) { bodyU.innerHTML = vide(6, msgVide); footU.innerHTML=''; }
+    else {
+      const su = [...ventesUSD].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+      bodyU.innerHTML = su.map(t => {
+        const pnl = pnlVente(t), f = fxDe(t.date), eq = pnl * f.rate;
+        const col = pnl>=0?'var(--green)':'var(--red)';
+        return `<tr>
+          <td style="font-size:10px;color:var(--muted)">${t.date}</td>
+          <td style="font-weight:600;font-family:var(--mono)">${t.symbole}</td>
+          <td style="text-align:right;font-family:var(--mono)">${fi(Math.abs(parseFloat(t.quantite)||0))}</td>
+          <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${pnl>=0?'+':''}${fi(pnl)}$ USD</td>
+          <td style="text-align:right;font-family:var(--mono);color:var(--muted)">${f.rate.toFixed(4)}${f.approx?'*':''}</td>
+          <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${eq>=0?'+':''}${fi(eq)}$ CAD</td>
+        </tr>`;
+      }).join('');
+      footU.innerHTML = `<tr style="border-top:2px solid var(--border)">
+        <td colspan="3" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL P&L RÉALISÉ USD</td>
+        <td style="text-align:right;font-weight:700;font-family:var(--mono);color:${totPnlUSD>=0?'var(--green)':'var(--red)'}">${totPnlUSD>=0?'+':''}${fi(totPnlUSD)}$ USD</td>
+        <td></td>
+        <td style="text-align:right;font-weight:700;font-family:var(--mono);color:${totEquivCAD>=0?'var(--green)':'var(--red)'}">${totEquivCAD>=0?'+':''}${fi(totEquivCAD)}$ CAD</td>
+      </tr>`;
+    }
+    renderPnlActResume(resume, totPnlCAD, totPnlUSD, totEquivCAD, fxApprox);
     return;
   }
 
-  // Vues par période — P&L déclenché uniquement aux ventes
+  // ── Vues MENSUEL / ANNUEL ─────────────────────────────────────────────────
   const periodKey = d => pnlActView==='annee'?(d||'').slice(0,4):(d||'').slice(0,7);
-  const periods = {};
-  const blank = ()=>({achats:0, ventes:0, pnl:0, frais:0, nbVentes:0});
+  const blank = () => ({achats:0, ventes:0, pnl:0, equiv:0, nbVentes:0});
 
-  achats.forEach(t => {
-    const k = periodKey(t.date); if(!k) return;
-    periods[k] = periods[k]||blank();
-    periods[k].achats += Math.abs(parseFloat(t.montant)||0);
-    periods[k].frais  += Math.abs(parseFloat(t.frais)||0);
-  });
-  ventes.forEach(t => {
-    const k = periodKey(t.date); if(!k) return;
-    periods[k] = periods[k]||blank();
-    periods[k].ventes   += Math.abs(parseFloat(t.montant)||0);
-    periods[k].pnl      += pnlVente(t);
-    periods[k].frais    += Math.abs(parseFloat(t.frais)||0);
-    periods[k].nbVentes++;
-  });
+  function agregerPeriodes(liste, avecEquiv) {
+    const periods = {};
+    liste.forEach(t => {
+      const k = periodKey(t.date); if(!k) return;
+      periods[k] = periods[k]||blank();
+      const op = (t.operation||'').toUpperCase();
+      if (op === 'ACHAT') {
+        periods[k].achats += Math.abs(parseFloat(t.montant)||0);
+      } else if (op === 'VENTE') {
+        periods[k].ventes += Math.abs(parseFloat(t.montant)||0);
+        const p = pnlVente(t);
+        periods[k].pnl += p;
+        if (avecEquiv) periods[k].equiv += p * fxDe(t.date).rate;
+        periods[k].nbVentes++;
+      }
+    });
+    return periods;
+  }
 
-  const keys = Object.keys(periods).sort().reverse();
-  head.innerHTML = '<tr><th>PÉRIODE</th><th style="text-align:right">ACHATS</th><th style="text-align:right">VENTES</th><th style="text-align:right">P&L RÉALISÉ</th></tr>';
-  if (!keys.length) { body.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune transaction</td></tr>`; foot.innerHTML=''; return; }
-
-  let tAchats=0, tVentes=0, tPnl=0;
-  body.innerHTML = keys.map(k => {
-    const p = periods[k];
-    tAchats += p.achats; tVentes += p.ventes; tPnl += p.pnl;
-    const col = p.nbVentes===0 ? 'var(--muted)' : p.pnl>=0?'var(--green)':'var(--red)';
-    const pnlStr = p.nbVentes===0 ? '—' : (p.pnl>=0?'+':'')+fi(p.pnl)+'$';
-    return `<tr>
-      <td style="font-weight:600">${k}</td>
-      <td style="text-align:right;font-family:var(--mono);color:var(--red)">${p.achats?'-'+fi(p.achats)+'$':'—'}</td>
-      <td style="text-align:right;font-family:var(--mono);color:var(--green)">${p.ventes?'+'+fi(p.ventes)+'$':'—'}</td>
-      <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${pnlStr}</td>
+  // Table CAD
+  const perC = agregerPeriodes(tCAD, false);
+  const keysC = Object.keys(perC).sort().reverse();
+  headC.innerHTML = '<tr><th>PÉRIODE</th><th style="text-align:right">ACHATS</th><th style="text-align:right">VENTES</th><th style="text-align:right">P&L RÉALISÉ CAD</th></tr>';
+  if (!keysC.length) { bodyC.innerHTML = vide(4, 'Aucune transaction CAD'); footC.innerHTML=''; }
+  else {
+    let aC=0, vC=0, pC=0;
+    bodyC.innerHTML = keysC.map(k => {
+      const p = perC[k];
+      aC += p.achats; vC += p.ventes; pC += p.pnl;
+      const col = p.nbVentes===0 ? 'var(--muted)' : p.pnl>=0?'var(--green)':'var(--red)';
+      const pnlStr = p.nbVentes===0 ? '—' : (p.pnl>=0?'+':'')+fi(p.pnl)+'$';
+      return `<tr>
+        <td style="font-weight:600">${k}</td>
+        <td style="text-align:right;font-family:var(--mono);color:var(--red)">${p.achats?'-'+fi(p.achats)+'$':'—'}</td>
+        <td style="text-align:right;font-family:var(--mono);color:var(--green)">${p.ventes?'+'+fi(p.ventes)+'$':'—'}</td>
+        <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${pnlStr}</td>
+      </tr>`;
+    }).join('');
+    footC.innerHTML = `<tr style="border-top:2px solid var(--border)">
+      <td style="padding:8px;font-weight:600">TOTAL CAD</td>
+      <td style="text-align:right;font-family:var(--mono);color:var(--red)">${aC?'-'+fi(aC)+'$':'—'}</td>
+      <td style="text-align:right;font-family:var(--mono);color:var(--green)">${vC?'+'+fi(vC)+'$':'—'}</td>
+      <td style="text-align:right;font-weight:700;font-family:var(--mono);color:${pC>=0?'var(--green)':'var(--red)'}">${pC>=0?'+':''}${fi(pC)}$ CAD</td>
     </tr>`;
-  }).join('');
-  foot.innerHTML = `<tr style="border-top:2px solid var(--border)">
-    <td style="padding:8px;font-weight:600">TOTAL</td>
-    <td style="text-align:right;font-family:var(--mono);color:var(--red)">${tAchats?'-'+fi(tAchats)+'$':'—'}</td>
-    <td style="text-align:right;font-family:var(--mono);color:var(--green)">${tVentes?'+'+fi(tVentes)+'$':'—'}</td>
-    <td style="text-align:right;font-weight:700;font-family:var(--mono);color:${tPnl>=0?'var(--green)':'var(--red)'}">${tPnl>=0?'+':''}${fi(tPnl)}$</td>
-  </tr>`;
+  }
+
+  // Table USD avec équiv. CAD
+  const perU = agregerPeriodes(tUSD, true);
+  const keysU = Object.keys(perU).sort().reverse();
+  headU.innerHTML = '<tr><th>PÉRIODE</th><th style="text-align:right">ACHATS</th><th style="text-align:right">VENTES</th><th style="text-align:right">P&L RÉALISÉ USD</th><th style="text-align:right">ÉQUIV. CAD</th></tr>';
+  if (!keysU.length) { bodyU.innerHTML = vide(5, 'Aucune transaction USD'); footU.innerHTML=''; }
+  else {
+    let aU=0, vU=0, pU=0, eU=0;
+    bodyU.innerHTML = keysU.map(k => {
+      const p = perU[k];
+      aU += p.achats; vU += p.ventes; pU += p.pnl; eU += p.equiv;
+      const col = p.nbVentes===0 ? 'var(--muted)' : p.pnl>=0?'var(--green)':'var(--red)';
+      const pnlStr = p.nbVentes===0 ? '—' : (p.pnl>=0?'+':'')+fi(p.pnl)+'$';
+      const eqStr  = p.nbVentes===0 ? '—' : (p.equiv>=0?'+':'')+fi(p.equiv)+'$';
+      return `<tr>
+        <td style="font-weight:600">${k}</td>
+        <td style="text-align:right;font-family:var(--mono);color:var(--red)">${p.achats?'-'+fi(p.achats)+'$':'—'}</td>
+        <td style="text-align:right;font-family:var(--mono);color:var(--green)">${p.ventes?'+'+fi(p.ventes)+'$':'—'}</td>
+        <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${pnlStr}</td>
+        <td style="text-align:right;font-family:var(--mono);color:${col};font-weight:600">${eqStr}</td>
+      </tr>`;
+    }).join('');
+    footU.innerHTML = `<tr style="border-top:2px solid var(--border)">
+      <td style="padding:8px;font-weight:600">TOTAL USD</td>
+      <td style="text-align:right;font-family:var(--mono);color:var(--red)">${aU?'-'+fi(aU)+'$':'—'}</td>
+      <td style="text-align:right;font-family:var(--mono);color:var(--green)">${vU?'+'+fi(vU)+'$':'—'}</td>
+      <td style="text-align:right;font-weight:700;font-family:var(--mono);color:${pU>=0?'var(--green)':'var(--red)'}">${pU>=0?'+':''}${fi(pU)}$ USD</td>
+      <td style="text-align:right;font-weight:700;font-family:var(--mono);color:${eU>=0?'var(--green)':'var(--red)'}">${eU>=0?'+':''}${fi(eU)}$ CAD</td>
+    </tr>`;
+  }
+
+  renderPnlActResume(resume, totPnlCAD, totPnlUSD, totEquivCAD, fxApprox);
+}
+
+// Bandeau résumé : total déclarable en CAD (gains CAD + gains USD convertis au FX du jour du trade)
+function renderPnlActResume(el, pnlCAD, pnlUSD, equivCAD, fxApprox) {
+  if (!el) return;
+  const declarable = pnlCAD + equivCAD;
+  const box = (lbl, val, col) =>
+    '<div style="flex:1;min-width:140px;background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:8px 10px">'+
+    '<div style="font-size:9px;color:var(--muted);letter-spacing:0.08em;margin-bottom:3px">'+lbl+'</div>'+
+    '<div style="font-family:var(--mono);font-weight:700;font-size:13px;color:'+col+'">'+val+'</div></div>';
+  const c = v => v>=0?'var(--green)':'var(--red)';
+  const s = v => (v>=0?'+':'')+fi(v);
+  el.innerHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+    box('P&L RÉALISÉ CAD', s(pnlCAD)+'$ CAD', c(pnlCAD))+
+    box('P&L RÉALISÉ USD', s(pnlUSD)+'$ USD', c(pnlUSD))+
+    box('ÉQUIV. CAD (FX DU TRADE)', s(equivCAD)+'$ CAD', c(equivCAD))+
+    box('TOTAL DÉCLARABLE (CAD)', s(declarable)+'$ CAD', c(declarable))+
+    '</div>'+
+    (fxApprox ? '<div style="font-size:9px;color:var(--muted);margin-top:4px">* Taux du jour utilisé faute de taux historique — se corrigera automatiquement au prochain chargement.</div>' : '');
 }
 
 // ═══ RECALC COMPTE ═══
