@@ -277,7 +277,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
       <thead><tr>
         <th>DATE</th><th>ID</th><th>TICKER</th><th>TYPE</th>
         <th>STRIKE</th><th>EXPIRATION</th><th>ACTION</th>
-        <th>CONTRATS</th><th>PRIX</th><th>PRIME NETTE</th>
+        <th>CONTRATS</th><th>PRIX</th><th>PRIME NETTE</th><th>ÉDITER</th>
       </tr></thead>
       <tbody id="trades-body"></tbody>
     </table>
@@ -330,9 +330,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
       <thead><tr>
         <th>DATE</th><th>SYMBOLE</th><th>DEV</th><th>OPÉRATION</th>
         <th style="text-align:right">QTÉ</th><th style="text-align:right">PRIX</th>
-        <th style="text-align:right">MONTANT</th>
+        <th style="text-align:right">MONTANT</th><th>ÉDITER</th>
       </tr></thead>
-      <tbody id="trades-act-body"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr></tbody>
+      <tbody id="trades-act-body"><tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -485,6 +485,46 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </div>
   </div>
 </div>
+<!-- MODAL ÉDITION TRANSACTION -->
+<div class="modal-bg" id="edit-trade-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-title"><span>Éditer la transaction</span><button class="modal-close" onclick="closeEditTrade()">✕</button></div>
+    <div class="modal-fields">
+      <div id="et-ctx" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:10px"></div>
+      <div id="et-opt-fields" style="display:none">
+        <label class="modal-label">Opération</label>
+        <select class="modal-inp" id="et-op"><option>STO</option><option>STC</option><option>BTO</option><option>BTC</option><option>EXP</option></select>
+        <label class="modal-label">Strike ($)</label>
+        <input class="modal-inp" id="et-strike" type="number" step="0.01">
+        <label class="modal-label">Expiration</label>
+        <input class="modal-inp" id="et-exp" type="date">
+        <label class="modal-label">Contrats</label>
+        <input class="modal-inp" id="et-cont" type="number" min="1">
+        <label class="modal-label">Prix ($)</label>
+        <input class="modal-inp" id="et-prix" type="number" step="0.01">
+        <label class="modal-label">Frais ($)</label>
+        <input class="modal-inp" id="et-frais" type="number" step="0.01">
+        <label class="modal-label">OCC</label>
+        <input class="modal-inp" id="et-occ" type="text">
+      </div>
+      <div id="et-act-fields" style="display:none">
+        <label class="modal-label">Opération</label>
+        <select class="modal-inp" id="et-aop"><option>ACHAT</option><option>VENTE</option></select>
+        <label class="modal-label">Quantité</label>
+        <input class="modal-inp" id="et-aqty" type="number" step="0.0001">
+        <label class="modal-label">Prix ($)</label>
+        <input class="modal-inp" id="et-aprix" type="number" step="0.01">
+        <label class="modal-label">Frais ($)</label>
+        <input class="modal-inp" id="et-afrais" type="number" step="0.01">
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-d" onclick="closeEditTrade()">Annuler</button>
+      <button class="btn btn-p" onclick="saveTradeEdit()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modal">
   <div class="modal">
     <div class="modal-title">
@@ -1870,7 +1910,10 @@ function renderTrades(rawTrades) {
     contrats:   t.contrats   || t.Contrats   || '',
     prix:       t.prix       || t.Prix       || t.price || t.Price || 0,
     pnl:        t.pnl        || t.Pnl        || t.PnL  || 0,
+    frais:      (t.frais!==undefined?t.frais:(t.Frais!==undefined?t.Frais:'')),
+    occ:        t.occ || t.OCC || '',
   }));
+  window._optTrades = trades;
   // Trier par date décroissante (plus récent en haut)
   trades.sort((a,b) => (b.date > a.date ? 1 : -1));
   body.innerHTML = trades.length
@@ -1901,9 +1944,73 @@ function renderTrades(rawTrades) {
               if (a==='BTC'||a==='STC'||a==='BTO') return '−$'+fi(Math.round(prime));
               return '$'+fi(Math.round(prime));
             })()+'</td>' +
+        '<td style="white-space:nowrap"><button class="btn btn-d" style="padding:2px 6px;font-size:9px" onclick="editTradeOption(\''+t.tradeId+'\')">✎</button> <button class="btn btn-r" style="padding:2px 6px;font-size:9px" onclick="delTrade(\'option\',\''+t.tradeId+'\')">✕</button></td>' +
         '</tr>';
       }).join('')
-    : '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1rem">Aucun trade enregistré</td></tr>';
+    : '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:1rem">Aucun trade enregistré</td></tr>';
+}
+
+// ═══ ÉDITION / SUPPRESSION DE TRANSACTIONS (depuis l'app) ═══
+let etKind = null, etId = null;
+function closeEditTrade(){ document.getElementById('edit-trade-modal').style.display='none'; etKind=null; etId=null; }
+function editTradeOption(id){
+  const t = (window._optTrades||[]).find(x=>String(x.tradeId)===String(id));
+  if(!t){ alert('Transaction introuvable — recharge la page.'); return; }
+  etKind='option'; etId=id;
+  document.getElementById('et-opt-fields').style.display='';
+  document.getElementById('et-act-fields').style.display='none';
+  document.getElementById('et-ctx').textContent = t.date+'  ·  '+t.ticker+' '+t.type+'  ·  '+id;
+  document.getElementById('et-op').value    = t.action||'STO';
+  document.getElementById('et-strike').value= t.strike||'';
+  document.getElementById('et-exp').value   = (t.expiration||'').slice(0,10);
+  document.getElementById('et-cont').value  = t.contrats||'';
+  document.getElementById('et-prix').value  = t.prix||'';
+  document.getElementById('et-frais').value = (t.frais!==undefined&&t.frais!==''?t.frais:0);
+  document.getElementById('et-occ').value   = t.occ||'';
+  document.getElementById('edit-trade-modal').style.display='flex';
+}
+function editTradeAction(id){
+  const t = (window._tradesActCache||[]).find(x=>String(x.tradeId)===String(id));
+  if(!t){ alert('Transaction introuvable — recharge la page.'); return; }
+  etKind='action'; etId=id;
+  document.getElementById('et-act-fields').style.display='';
+  document.getElementById('et-opt-fields').style.display='none';
+  document.getElementById('et-ctx').textContent = (t.date||'')+'  ·  '+(t.symbole||'')+' ('+(t.devise||'')+')  ·  '+id;
+  document.getElementById('et-aop').value    = t.operation||'ACHAT';
+  document.getElementById('et-aqty').value   = t.quantite||'';
+  document.getElementById('et-aprix').value  = t.prix||'';
+  document.getElementById('et-afrais').value = (t.frais!==undefined&&t.frais!==''?t.frais:0);
+  document.getElementById('edit-trade-modal').style.display='flex';
+}
+async function saveTradeEdit(){
+  if(!etId) return;
+  setSyncStatus(false,'Mise à jour…');
+  if(etKind==='option'){
+    await gsApi({action:'updateTradeOption', tradeId:etId,
+      operation: document.getElementById('et-op').value,
+      strike:    document.getElementById('et-strike').value,
+      expiration:document.getElementById('et-exp').value,
+      contrats:  document.getElementById('et-cont').value,
+      prix:      document.getElementById('et-prix').value,
+      frais:     document.getElementById('et-frais').value,
+      occ:       document.getElementById('et-occ').value });
+  } else {
+    await gsApi({action:'updateTradeAction', tradeId:etId,
+      operation:document.getElementById('et-aop').value,
+      quantite: document.getElementById('et-aqty').value,
+      prix:     document.getElementById('et-aprix').value,
+      frais:    document.getElementById('et-afrais').value });
+  }
+  closeEditTrade();
+  await loadAll();
+  setSyncStatus(true,'✓ Transaction modifiée — positions et cash recalculés');
+}
+async function delTrade(kind, id){
+  if(!confirm('Supprimer définitivement cette transaction ?\nLe moteur recalculera positions et cash.')) return;
+  setSyncStatus(false,'Suppression…');
+  await gsApi({action: (kind==='option'?'deleteTradeOption':'deleteTradeAction'), tradeId:id});
+  await loadAll();
+  setSyncStatus(true,'✓ Transaction supprimée — positions et cash recalculés');
 }
 
 // ═══ MODAL ═══
@@ -2924,7 +3031,7 @@ function renderTradesActions(rawTrades) {
   window._tradesActCache = trades;
   renderPnlActRealized();
   if (trades.length === 0) {
-    body.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr>';
+    body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction</td></tr>';
     return;
   }
   const sorted = trades.slice().sort((a,b) => (b.date||'').localeCompare(a.date||''));
@@ -2942,6 +3049,7 @@ function renderTradesActions(rawTrades) {
       '<td style="text-align:right;font-family:var(--mono)">'+(t.quantite||0)+'</td>'+
       '<td style="text-align:right;font-family:var(--mono)">$'+f2(Math.abs(parseFloat(t.prix)||0))+'</td>'+
       '<td style="text-align:right;font-family:var(--mono);color:'+(montant>=0?'var(--green)':'var(--red)')+'">'+(montant>=0?'+':'')+fi(Math.round(Math.abs(montant)))+'$</td>'+
+      '<td style="white-space:nowrap"><button class="btn btn-d" style="padding:2px 6px;font-size:9px" onclick="editTradeAction(\''+t.tradeId+'\')">✎</button> <button class="btn btn-r" style="padding:2px 6px;font-size:9px" onclick="delTrade(\'action\',\''+t.tradeId+'\')">✕</button></td>'+
     '</tr>';
   }).join('');
 }
