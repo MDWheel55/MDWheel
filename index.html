@@ -252,7 +252,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
 
   <div class="sec" style="margin-top:1.5rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <span>P&amp;L RÉALISÉ</span>
+    <span>P&amp;L RÉALISÉ — OPTIONS</span>
     <div style="display:flex;gap:6px">
       <button class="btn btn-d" id="pnl-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPnlView('mois')">Mensuel</button>
       <button class="btn btn-d" id="pnl-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPnlView('annee')">Annuel</button>
@@ -260,11 +260,21 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </div>
     <span style="font-size:9px;color:var(--muted)">Gain en capital — 50% imposable</span>
   </div>
+  <div id="pnl-opt-resume" style="margin-bottom:0.75rem"></div>
+  <div class="sec">P&amp;L RÉALISÉ — OPTIONS CAD <span style="color:var(--muted);font-weight:400">· XEG, Bourse de Montréal</span></div>
+  <div class="pwrap" style="margin-bottom:1rem">
+    <table class="ptbl">
+      <thead id="pnl-cad-head"></thead>
+      <tbody id="pnl-cad-body"></tbody>
+      <tfoot id="pnl-cad-foot"></tfoot>
+    </table>
+  </div>
+  <div class="sec">P&amp;L RÉALISÉ — OPTIONS USD <span style="color:var(--muted);font-weight:400">· équiv. CAD au taux du jour du trade (BCE)</span></div>
   <div class="pwrap">
     <table class="ptbl">
-      <thead id="pnl-head"></thead>
-      <tbody id="pnl-body"></tbody>
-      <tfoot id="pnl-foot"></tfoot>
+      <thead id="pnl-usd-head"></thead>
+      <tbody id="pnl-usd-body"></tbody>
+      <tfoot id="pnl-usd-foot"></tfoot>
     </table>
   </div>
   <div style="font-size:9px;color:var(--muted);margin-top:6px;padding:0 4px">
@@ -309,13 +319,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
 
   <div class="sec" style="display:flex;align-items:center;justify-content:space-between">
-    <span>P&L RÉALISÉ — ACTIONS CAD</span>
+    <span>P&L RÉALISÉ — ACTIONS</span>
     <div style="display:flex;gap:6px">
       <button class="btn btn-d" id="pnl-act-v-mois"     style="padding:3px 10px;font-size:10px" onclick="setPnlActView('mois')">Mensuel</button>
       <button class="btn btn-d" id="pnl-act-v-annee"    style="padding:3px 10px;font-size:10px" onclick="setPnlActView('annee')">Annuel</button>
       <button class="btn btn-d" id="pnl-act-v-position" style="padding:3px 10px;font-size:10px" onclick="setPnlActView('position')">Par position</button>
     </div>
   </div>
+  <div id="pnl-act-resume" style="margin-bottom:0.75rem"></div>
+  <div class="sec">P&L RÉALISÉ — ACTIONS CAD</div>
   <div class="pwrap" style="margin-bottom:1rem">
     <table class="ptbl">
       <thead id="pnl-act-cad-head"></thead>
@@ -325,14 +337,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
 
   <div class="sec">P&L RÉALISÉ — ACTIONS USD <span style="color:var(--muted);font-weight:400">· équiv. CAD au taux du jour du trade (BCE)</span></div>
-  <div class="pwrap" style="margin-bottom:0.75rem">
+  <div class="pwrap" style="margin-bottom:1.5rem">
     <table class="ptbl">
       <thead id="pnl-act-usd-head"></thead>
       <tbody id="pnl-act-usd-body"></tbody>
       <tfoot id="pnl-act-usd-foot"></tfoot>
     </table>
   </div>
-  <div id="pnl-act-resume" style="margin-bottom:1.5rem"></div>
 
   <div class="sec">HISTORIQUE DES TRANSACTIONS — ACTIONS</div>
   <div class="pwrap">
@@ -1678,10 +1689,14 @@ function isStockTrade(t) {
 }
 
 function renderPnlRealized() {
-  const head = document.getElementById('pnl-head');
-  const body = document.getElementById('pnl-body');
-  const foot = document.getElementById('pnl-foot');
-  if (!head || !body) return;
+  const headC = document.getElementById('pnl-cad-head');
+  const bodyC = document.getElementById('pnl-cad-body');
+  const footC = document.getElementById('pnl-cad-foot');
+  const headU = document.getElementById('pnl-usd-head');
+  const bodyU = document.getElementById('pnl-usd-body');
+  const footU = document.getElementById('pnl-usd-foot');
+  const resume = document.getElementById('pnl-opt-resume');
+  if (!headC || !bodyC || !headU || !bodyU) return;
 
   const trades = tradesCache;
 
@@ -1753,142 +1768,210 @@ function renderPnlRealized() {
     return pnl;
   }
 
-  const ouvertures = trades.filter(t => t.action === 'STO' || t.action === 'BTO');
-  const fermetures = trades.filter(t => ['BTC','STC','EXP'].includes(t.action));
+  // Séparation par devise de règlement (XEG → CAD, le reste → USD)
+  const tCAD = trades.filter(t => deviseTicker(t.ticker) === 'CAD');
+  const tUSD = trades.filter(t => deviseTicker(t.ticker) === 'USD');
+  const fermC = tCAD.filter(t => ['BTC','STC','EXP'].includes(t.action));
+  const fermU = tUSD.filter(t => ['BTC','STC','EXP'].includes(t.action));
+  const ouvC  = tCAD.filter(t => t.action === 'STO' || t.action === 'BTO');
+  const ouvU  = tUSD.filter(t => t.action === 'STO' || t.action === 'BTO');
+
+  // Totaux globaux (pour le résumé déclarable en haut)
+  let totPnlCAD = 0, totPnlUSD = 0, totEquivCAD = 0, fxApprox = false;
+  fermC.forEach(t => { totPnlCAD += calcPnl(t); });
+  fermU.forEach(t => {
+    const p = calcPnl(t), f = fxDuTrade(t.date);
+    totPnlUSD += p;
+    totEquivCAD += p * f.rate;
+    if (f.approx) fxApprox = true;
+  });
+  renderPnlOptResume(resume, totPnlCAD, totPnlUSD, totEquivCAD, fxApprox);
+
+  const col = v => v>=0?'var(--green)':'var(--red)';
+  const sgn = v => (v>=0?'+':'')+fi(v)+'$';
+  const vide = (cols, msg) => '<tr><td colspan="'+cols+'" style="text-align:center;color:var(--muted);padding:1.5rem">'+msg+'</td></tr>';
 
   // ── Vue par position ──────────────────────────────────────────────────────
   if (pnlView === 'position') {
-    head.innerHTML = '<tr><th>DATE</th><th>TICKER</th><th>TYPE</th><th>STRIKE</th>'
-      + '<th>FERMETURE</th><th>CONTRATS</th><th>P&L RÉALISÉ</th><th>IMPOSABLE 50%</th></tr>';
-    if (fermetures.length === 0) {
-      body.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune position fermée</td></tr>';
-      foot.innerHTML = ''; return;
-    }
-    const sorted = [...fermetures].sort((a,b) => (b.date > a.date ? 1 : -1));
-    const totR = {USD:0, CAD:0};
-    body.innerHTML = sorted.map(t => {
-      const pnl = calcPnl(t);
-      totR[deviseTicker(t.ticker)] += pnl;
-      const imp = Math.round(pnl * 0.5);
-      const fermLabel = {BTC:'Rachat',STC:'Vente',EXP:'Expiration'}[t.action] || t.action;
-      const tkCls = t.ticker==='QQQ'?'tq':t.ticker==='SPY'?'ts':t.ticker==='GLD'?'tg':t.ticker==='XEG'?'tx':'tn';
-      return '<tr>'
-        + '<td style="font-size:10px">'+t.date+'</td>'
-        + '<td><span class="tk '+tkCls+'">'+t.ticker+'</span></td>'
-        + '<td style="font-size:9px;color:var(--muted)">'+t.type+'</td>'
-        + '<td>$'+t.strike+'</td>'
-        + '<td style="font-size:10px">'+fermLabel+'</td>'
-        + '<td>'+t.contrats+'</td>'
-        + '<td style="color:'+(pnl>=0?'var(--green)':'var(--red)')+';font-weight:600">'+(pnl>=0?'+':'')+fi(pnl)+'$</td>'
-        + '<td style="color:var(--muted)">'+(imp>=0?'+':'')+fi(imp)+'$</td>'
+    const tkCls = t => t.ticker==='QQQ'?'tq':t.ticker==='SPY'?'ts':t.ticker==='GLD'?'tg':t.ticker==='XEG'?'tx':'tn';
+    const fermLbl = t => ({BTC:'Rachat',STC:'Vente',EXP:'Expiration'}[t.action] || t.action);
+
+    // Table CAD
+    headC.innerHTML = '<tr><th>DATE</th><th>TICKER</th><th>TYPE</th><th>STRIKE</th>'
+      + '<th>FERMETURE</th><th>CONTRATS</th><th>P&L RÉALISÉ CAD</th><th>IMPOSABLE 50%</th></tr>';
+    if (!fermC.length) { bodyC.innerHTML = vide(8, 'Aucune position fermée en CAD'); footC.innerHTML = ''; }
+    else {
+      const sc = [...fermC].sort((a,b) => (b.date > a.date ? 1 : -1));
+      bodyC.innerHTML = sc.map(t => {
+        const pnl = calcPnl(t), imp = Math.round(pnl * 0.5);
+        return '<tr>'
+          + '<td style="font-size:10px">'+t.date+'</td>'
+          + '<td><span class="tk '+tkCls(t)+'">'+t.ticker+'</span></td>'
+          + '<td style="font-size:9px;color:var(--muted)">'+t.type+'</td>'
+          + '<td>$'+t.strike+'</td>'
+          + '<td style="font-size:10px">'+fermLbl(t)+'</td>'
+          + '<td>'+t.contrats+'</td>'
+          + '<td style="color:'+col(pnl)+';font-weight:600">'+sgn(pnl)+' CAD</td>'
+          + '<td style="color:var(--muted)">'+sgn(imp)+'</td>'
+          + '</tr>';
+      }).join('');
+      footC.innerHTML = '<tr style="border-top:2px solid var(--border)">'
+        + '<td colspan="6" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL P&L RÉALISÉ CAD</td>'
+        + '<td style="font-weight:700;color:'+col(totPnlCAD)+'">'+sgn(totPnlCAD)+' CAD</td>'
+        + '<td style="color:var(--muted);font-weight:600">'+sgn(Math.round(totPnlCAD*0.5))+'</td>'
         + '</tr>';
-    }).join('');
-    const cursR = ['USD']; if(sorted.some(t=>deviseTicker(t.ticker)==='CAD')) cursR.push('CAD');
-    const impR = {USD:Math.round(totR.USD*0.5), CAD:Math.round(totR.CAD*0.5)};
-    foot.innerHTML = '<tr style="border-top:2px solid var(--border)">'
-      + '<td colspan="6" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL P&L RÉALISÉ</td>'
-      + '<td style="font-weight:600">'+fmtPnlDevises(totR, cursR)+'</td>'
-      + '<td style="font-weight:600">'+fmtPnlDevises(impR, cursR)+'</td>'
-      + '</tr>';
+    }
+
+    // Table USD avec équiv. CAD au FX du jour du trade
+    headU.innerHTML = '<tr><th>DATE</th><th>TICKER</th><th>TYPE</th><th>STRIKE</th>'
+      + '<th>FERMETURE</th><th>CONTRATS</th><th>P&L RÉALISÉ USD</th><th>FX JOUR</th><th>ÉQUIV. CAD</th></tr>';
+    if (!fermU.length) { bodyU.innerHTML = vide(9, 'Aucune position fermée en USD'); footU.innerHTML = ''; }
+    else {
+      const su = [...fermU].sort((a,b) => (b.date > a.date ? 1 : -1));
+      bodyU.innerHTML = su.map(t => {
+        const pnl = calcPnl(t), f = fxDuTrade(t.date), eq = pnl * f.rate;
+        return '<tr>'
+          + '<td style="font-size:10px">'+t.date+'</td>'
+          + '<td><span class="tk '+tkCls(t)+'">'+t.ticker+'</span></td>'
+          + '<td style="font-size:9px;color:var(--muted)">'+t.type+'</td>'
+          + '<td>$'+t.strike+'</td>'
+          + '<td style="font-size:10px">'+fermLbl(t)+'</td>'
+          + '<td>'+t.contrats+'</td>'
+          + '<td style="color:'+col(pnl)+';font-weight:600">'+sgn(pnl)+' USD</td>'
+          + '<td style="font-family:var(--mono);color:var(--muted)">'+f.rate.toFixed(4)+(f.approx?'*':'')+'</td>'
+          + '<td style="color:'+col(eq)+';font-weight:600">'+sgn(eq)+' CAD</td>'
+          + '</tr>';
+      }).join('');
+      footU.innerHTML = '<tr style="border-top:2px solid var(--border)">'
+        + '<td colspan="6" style="padding:8px;font-weight:600;font-size:10px;color:var(--muted)">TOTAL P&L RÉALISÉ USD</td>'
+        + '<td style="font-weight:700;color:'+col(totPnlUSD)+'">'+sgn(totPnlUSD)+' USD</td>'
+        + '<td></td>'
+        + '<td style="font-weight:700;color:'+col(totEquivCAD)+'">'+sgn(totEquivCAD)+' CAD</td>'
+        + '</tr>';
+    }
     return;
   }
 
   // ── Vues par période (mois ou année) ─────────────────────────────────────
   const periodKey = d => pnlView === 'annee' ? (d||'').slice(0,4) : (d||'').slice(0,7);
-  const periods = {};
-  const blank = () => ({primesOpt:{USD:0,CAD:0}, pnlOpt:{USD:0,CAD:0}, frais:{USD:0,CAD:0}});
+  const blank = () => ({primes:0, pnl:0, equiv:0, frais:0});
 
   // Primes encaissées = STO uniquement (entrées de cash)
   // BTO = achat de protection/LEAPS → coût d'investissement, pas une prime
   // Le P&L des BTO est capturé au STC (fermeture)
-  ouvertures.forEach(t => {
-    const k = periodKey(t.date); if (!k) return;
-    periods[k] = periods[k] || blank();
-    const prix = parseFloat(t.prix) || 0;
-    const qty  = Math.abs(parseInt(t.contrats)||1);
-    // Sanity check: prix unitaire d'une option entre 0 et 1000$
-    // Si > 1000, c'est probablement le montant brut mal placé dans la colonne Prix
-    if (t.action === 'STO' && prix > 0 && prix <= 1000) {
-      const montant = Math.round(prix * 100 * qty);
-      const dev = deviseTicker(t.ticker);
-      periods[k].primesOpt[dev] += montant;
-      periods[k].frais[dev] += (parseFloat(t.frais)||0);
-    } else if (t.action === 'STO' && prix > 1000) {
-      console.warn('Prime aberrante ignorée:', t.ticker, t.strike, t.date, 'prix=', prix);
-    }
-    // BTO ignoré des primes — son P&L apparaît dans P&L Réalisé au moment du STC
-  });
-
-  // P&L réalisé calculé à partir des fermetures
-  fermetures.forEach(t => {
-    const k = periodKey(t.date); if (!k) return;
-    periods[k] = periods[k] || blank();
-    const dev = deviseTicker(t.ticker);
-    periods[k].pnlOpt[dev] += calcPnl(t);
-    periods[k].frais[dev]  += (parseFloat(t.frais)||0);
-  });
-
-  const keys = Object.keys(periods).sort().reverse();
-  head.innerHTML = '<tr><th>PÉRIODE</th><th>PRIMES OPTIONS</th>'
-    + '<th>P&L RÉALISÉ</th><th>FRAIS</th><th>CASHFLOW NET</th><th>IMPOSABLE 50%</th></tr>';
-
-  if (keys.length === 0) {
-    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1.5rem">Aucune transaction enregistrée</td></tr>';
-    foot.innerHTML = ''; return;
+  function agregerOpt(ouvertures, fermetures, avecEquiv) {
+    const periods = {};
+    ouvertures.forEach(t => {
+      const k = periodKey(t.date); if (!k) return;
+      periods[k] = periods[k] || blank();
+      const prix = parseFloat(t.prix) || 0;
+      const qty  = Math.abs(parseInt(t.contrats)||1);
+      // Sanity check: prix unitaire d'une option entre 0 et 1000$
+      // Si > 1000, c'est probablement le montant brut mal placé dans la colonne Prix
+      if (t.action === 'STO' && prix > 0 && prix <= 1000) {
+        periods[k].primes += Math.round(prix * 100 * qty);
+        periods[k].frais  += (parseFloat(t.frais)||0);
+      } else if (t.action === 'STO' && prix > 1000) {
+        console.warn('Prime aberrante ignorée:', t.ticker, t.strike, t.date, 'prix=', prix);
+      }
+      // BTO ignoré des primes — son P&L apparaît dans P&L Réalisé au moment du STC
+    });
+    fermetures.forEach(t => {
+      const k = periodKey(t.date); if (!k) return;
+      periods[k] = periods[k] || blank();
+      const p = calcPnl(t);
+      periods[k].pnl   += p;
+      periods[k].frais += (parseFloat(t.frais)||0);
+      if (avecEquiv) periods[k].equiv += p * fxDuTrade(t.date).rate;
+    });
+    return periods;
   }
 
-  const hasCad = keys.some(k => periods[k].primesOpt.CAD || periods[k].pnlOpt.CAD || periods[k].frais.CAD);
-  const curs = hasCad ? ['USD','CAD'] : ['USD'];
-  const tot = {primesOpt:{USD:0,CAD:0}, pnlOpt:{USD:0,CAD:0}, frais:{USD:0,CAD:0}};
-  const col = v => v>=0?'var(--green)':'var(--red)';
-  const sgn = v => (v>=0?'+':'')+fi(v)+'$';
-  body.innerHTML = keys.map(k => {
-    const p = periods[k];
-    ['USD','CAD'].forEach(c=>{ tot.primesOpt[c]+=p.primesOpt[c]; tot.pnlOpt[c]+=p.pnlOpt[c]; tot.frais[c]+=p.frais[c]; });
-    const cashflow = {USD:p.primesOpt.USD+p.pnlOpt.USD, CAD:p.primesOpt.CAD+p.pnlOpt.CAD};
-    const imp = {USD:Math.round(p.pnlOpt.USD*0.5), CAD:Math.round(p.pnlOpt.CAD*0.5)};
-    if(!hasCad){
-      const cf=cashflow.USD, im=imp.USD;
+  // Table CAD
+  const perC = agregerOpt(ouvC, fermC, false);
+  const keysC = Object.keys(perC).sort().reverse();
+  headC.innerHTML = '<tr><th>PÉRIODE</th><th>PRIMES OPTIONS</th>'
+    + '<th>P&L RÉALISÉ CAD</th><th>FRAIS</th><th>CASHFLOW NET</th><th>IMPOSABLE 50%</th></tr>';
+  if (!keysC.length) { bodyC.innerHTML = vide(6, 'Aucune transaction option CAD'); footC.innerHTML = ''; }
+  else {
+    const tC = blank();
+    bodyC.innerHTML = keysC.map(k => {
+      const p = perC[k];
+      tC.primes += p.primes; tC.pnl += p.pnl; tC.frais += p.frais;
+      const cf = p.primes + p.pnl, im = Math.round(p.pnl*0.5);
       return '<tr>'
         + '<td style="font-weight:600">'+k+'</td>'
-        + '<td style="color:var(--green)">'+sgn(p.primesOpt.USD)+'</td>'
-        + '<td style="color:'+col(p.pnlOpt.USD)+'">'+sgn(p.pnlOpt.USD)+'</td>'
-        + '<td style="color:var(--muted)">'+(p.frais.USD?'$'+fi(p.frais.USD):'—')+'</td>'
+        + '<td style="color:var(--green)">'+sgn(p.primes)+'</td>'
+        + '<td style="color:'+col(p.pnl)+'">'+sgn(p.pnl)+'</td>'
+        + '<td style="color:var(--muted)">'+(p.frais?'$'+fi(p.frais):'—')+'</td>'
         + '<td style="color:'+col(cf)+';font-weight:600">'+sgn(cf)+'</td>'
         + '<td style="color:var(--muted)">'+sgn(im)+'</td>'
         + '</tr>';
-    }
-    return '<tr>'
-      + '<td style="font-weight:600">'+k+'</td>'
-      + '<td>'+fmtPnlDevises(p.primesOpt, curs)+'</td>'
-      + '<td>'+fmtPnlDevises(p.pnlOpt, curs)+'</td>'
-      + '<td>'+fmtFraisDevises(p.frais, curs)+'</td>'
-      + '<td style="font-weight:700">'+fmtPnlDevises(cashflow, curs)+'</td>'
-      + '<td>'+fmtPnlDevises(imp, curs)+'</td>'
-      + '</tr>';
-  }).join('');
-
-  const totCash = {USD:tot.primesOpt.USD+tot.pnlOpt.USD, CAD:tot.primesOpt.CAD+tot.pnlOpt.CAD};
-  const totImp  = {USD:Math.round(tot.pnlOpt.USD*0.5), CAD:Math.round(tot.pnlOpt.CAD*0.5)};
-  if(!hasCad){
-    foot.innerHTML = '<tr style="border-top:2px solid var(--border)">'
-      + '<td style="padding:8px;font-weight:600">TOTAL</td>'
-      + '<td style="color:var(--green);font-weight:600">'+sgn(tot.primesOpt.USD)+'</td>'
-      + '<td style="color:'+col(tot.pnlOpt.USD)+';font-weight:600">'+sgn(tot.pnlOpt.USD)+'</td>'
-      + '<td style="color:var(--muted);font-weight:600">'+(tot.frais.USD?'$'+fi(tot.frais.USD):'—')+'</td>'
-      + '<td style="color:'+col(totCash.USD)+';font-weight:700">'+sgn(totCash.USD)+'</td>'
-      + '<td style="color:var(--muted);font-weight:600">'+sgn(totImp.USD)+'</td>'
-      + '</tr>';
-  } else {
-    foot.innerHTML = '<tr style="border-top:2px solid var(--border)">'
-      + '<td style="padding:8px;font-weight:600">TOTAL</td>'
-      + '<td>'+fmtPnlDevises(tot.primesOpt, curs)+'</td>'
-      + '<td>'+fmtPnlDevises(tot.pnlOpt, curs)+'</td>'
-      + '<td>'+fmtFraisDevises(tot.frais, curs)+'</td>'
-      + '<td style="font-weight:700">'+fmtPnlDevises(totCash, curs)+'</td>'
-      + '<td>'+fmtPnlDevises(totImp, curs)+'</td>'
+    }).join('');
+    const cfT = tC.primes + tC.pnl;
+    footC.innerHTML = '<tr style="border-top:2px solid var(--border)">'
+      + '<td style="padding:8px;font-weight:600">TOTAL CAD</td>'
+      + '<td style="color:var(--green);font-weight:600">'+sgn(tC.primes)+'</td>'
+      + '<td style="color:'+col(tC.pnl)+';font-weight:600">'+sgn(tC.pnl)+'</td>'
+      + '<td style="color:var(--muted);font-weight:600">'+(tC.frais?'$'+fi(tC.frais):'—')+'</td>'
+      + '<td style="color:'+col(cfT)+';font-weight:700">'+sgn(cfT)+'</td>'
+      + '<td style="color:var(--muted);font-weight:600">'+sgn(Math.round(tC.pnl*0.5))+'</td>'
       + '</tr>';
   }
+
+  // Table USD avec équiv. CAD du P&L réalisé
+  const perU = agregerOpt(ouvU, fermU, true);
+  const keysU = Object.keys(perU).sort().reverse();
+  headU.innerHTML = '<tr><th>PÉRIODE</th><th>PRIMES OPTIONS</th>'
+    + '<th>P&L RÉALISÉ USD</th><th>FRAIS</th><th>CASHFLOW NET</th><th>ÉQUIV. CAD</th></tr>';
+  if (!keysU.length) { bodyU.innerHTML = vide(6, 'Aucune transaction option USD'); footU.innerHTML = ''; }
+  else {
+    const tU = blank();
+    bodyU.innerHTML = keysU.map(k => {
+      const p = perU[k];
+      tU.primes += p.primes; tU.pnl += p.pnl; tU.frais += p.frais; tU.equiv += p.equiv;
+      const cf = p.primes + p.pnl;
+      const eqStr = (p.pnl || p.equiv) ? sgn(p.equiv) : '—';
+      return '<tr>'
+        + '<td style="font-weight:600">'+k+'</td>'
+        + '<td style="color:var(--green)">'+sgn(p.primes)+'</td>'
+        + '<td style="color:'+col(p.pnl)+'">'+sgn(p.pnl)+'</td>'
+        + '<td style="color:var(--muted)">'+(p.frais?'$'+fi(p.frais):'—')+'</td>'
+        + '<td style="color:'+col(cf)+';font-weight:600">'+sgn(cf)+'</td>'
+        + '<td style="color:'+col(p.equiv)+';font-weight:600">'+eqStr+'</td>'
+        + '</tr>';
+    }).join('');
+    const cfT = tU.primes + tU.pnl;
+    footU.innerHTML = '<tr style="border-top:2px solid var(--border)">'
+      + '<td style="padding:8px;font-weight:600">TOTAL USD</td>'
+      + '<td style="color:var(--green);font-weight:600">'+sgn(tU.primes)+'</td>'
+      + '<td style="color:'+col(tU.pnl)+';font-weight:600">'+sgn(tU.pnl)+' USD</td>'
+      + '<td style="color:var(--muted);font-weight:600">'+(tU.frais?'$'+fi(tU.frais):'—')+'</td>'
+      + '<td style="color:'+col(cfT)+';font-weight:700">'+sgn(cfT)+'</td>'
+      + '<td style="color:'+col(tU.equiv)+';font-weight:700">'+sgn(tU.equiv)+' CAD</td>'
+      + '</tr>';
+  }
+}
+
+// Bandeau résumé options : total déclarable en CAD + portion imposable 50%
+function renderPnlOptResume(el, pnlCAD, pnlUSD, equivCAD, fxApprox) {
+  if (!el) return;
+  const declarable = pnlCAD + equivCAD;
+  const imposable  = Math.round(declarable * 0.5);
+  const box = (lbl, val, col) =>
+    '<div style="flex:1;min-width:140px;background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:8px 10px">'+
+    '<div style="font-size:9px;color:var(--muted);letter-spacing:0.08em;margin-bottom:3px">'+lbl+'</div>'+
+    '<div style="font-family:var(--mono);font-weight:700;font-size:13px;color:'+col+'">'+val+'</div></div>';
+  const c = v => v>=0?'var(--green)':'var(--red)';
+  const s = v => (v>=0?'+':'')+fi(v);
+  el.innerHTML = '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+    box('P&L RÉALISÉ CAD', s(pnlCAD)+'$ CAD', c(pnlCAD))+
+    box('P&L RÉALISÉ USD', s(pnlUSD)+'$ USD', c(pnlUSD))+
+    box('ÉQUIV. CAD (FX DU TRADE)', s(equivCAD)+'$ CAD', c(equivCAD))+
+    box('TOTAL DÉCLARABLE (CAD)', s(declarable)+'$ CAD', c(declarable))+
+    box('IMPOSABLE 50% (CAD)', s(imposable)+'$ CAD', 'var(--muted)')+
+    '</div>'+
+    (fxApprox ? '<div style="font-size:9px;color:var(--muted);margin-top:4px">* Taux du jour utilisé faute de taux historique — se corrigera automatiquement au prochain chargement.</div>' : '');
 }
 
 function renderTrades(rawTrades) {
@@ -1896,6 +1979,8 @@ function renderTrades(rawTrades) {
   // Alimenter le cache pour le P&L réalisé et le rafraîchir
   tradesCache = normalizeTrades(rawTrades);
   renderPnlRealized();
+  // Charger les taux FX historiques des fermetures USD (async — re-rendra le P&L une fois reçus)
+  chargerFXHistorique();
   if (!body) return;
   // Normaliser: accepter array direct ou objet {trades:[...]}
   let trades = Array.isArray(rawTrades) ? rawTrades
@@ -3249,13 +3334,29 @@ function devTradeAction(t) {
   return /^(CBIL|VEQT|XEG)/.test(sym) ? 'CAD' : 'USD';
 }
 
+// FX du jour du trade : cache historique en priorité, repli taux du jour (marqué approx)
+function fxDuTrade(date) {
+  const h = window._fxHist[date];
+  if (h && h.rate > 0) return { rate: h.rate, approx: (h.src === 'jour') };
+  const fxJour = mkt.USDCAD || parseFloat(gv('c-fx','1.397'));
+  return { rate: fxJour, approx: true };
+}
+
+// Dates de réalisation USD sans taux historique : ventes d'actions + fermetures d'options
+function datesFXManquantes() {
+  const dates = [];
+  (window._tradesActCache || []).forEach(t => {
+    if ((t.operation||'').toUpperCase() === 'VENTE' && devTradeAction(t) === 'USD' && t.date) dates.push(t.date);
+  });
+  (tradesCache || []).forEach(t => {
+    if (['BTC','STC','EXP'].includes(t.action) && deviseTicker(t.ticker) === 'USD' && t.date) dates.push(t.date);
+  });
+  return [...new Set(dates)].filter(d => !window._fxHist[d]);
+}
+
 async function chargerFXHistorique() {
   if (_fxHistEnCours) return;
-  const trades = window._tradesActCache || [];
-  const manquantes = [...new Set(trades
-    .filter(t => (t.operation||'').toUpperCase() === 'VENTE' && devTradeAction(t) === 'USD')
-    .map(t => t.date)
-    .filter(d => d && !window._fxHist[d]))];
+  const manquantes = datesFXManquantes();
   if (!manquantes.length) return;
   _fxHistEnCours = true;
   try {
@@ -3263,6 +3364,7 @@ async function chargerFXHistorique() {
     if (r && r.rates) {
       Object.keys(r.rates).forEach(d => { window._fxHist[d] = r.rates[d]; });
       renderPnlActRealized();
+      renderPnlRealized();
     }
   } finally { _fxHistEnCours = false; }
 }
@@ -3279,14 +3381,9 @@ function renderPnlActRealized() {
 
   // Trades actions depuis tradesActCache (chargé avec getTradesActions)
   const trades = (window._tradesActCache || []);
-  const fxJour = mkt.USDCAD || parseFloat(gv('c-fx','1.397'));
 
-  // FX du jour du trade : cache historique en priorité, repli taux du jour (marqué *)
-  function fxDe(date) {
-    const h = window._fxHist[date];
-    if (h && h.rate > 0) return { rate: h.rate, approx: (h.src === 'jour') };
-    return { rate: fxJour, approx: true };
-  }
+  // FX du jour du trade : helper partagé (cache historique, repli taux du jour marqué *)
+  const fxDe = fxDuTrade;
 
   // Registre des coûts moyens pondérés par symbole, dans l'ordre chronologique.
   // Un symbole vit dans une seule devise : les registres CAD/USD ne se mélangent pas.
