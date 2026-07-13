@@ -3592,25 +3592,33 @@ function renderPnlActResume(el, pnlCAD, pnlUSD, equivCAD, fxApprox) {
 //  TRÉSORERIE — Journal des flux non-transactionnels
 // ══════════════════════════════════════════════════════════════════
 
-// Données initiales chargées depuis les relevés Disnat (nov 2025 → mai 2026)
-let fluxData = [
-  {id:'F001', date:'2025-11-12', type:'Dépôt',      devise:'CAD', montant:  35000.00, desc:'DEPOT SIPC - CP90104',                      compte:'1BD21L0'},
-  {id:'F002', date:'2025-11-12', type:'Transfert',  devise:'USD', montant:  93922.05, desc:'Transfert de 5DJ1WM0 (ancien compte)',        compte:'1BD21M8'},
-  {id:'F003', date:'2025-11-13', type:'Conversion', devise:'USD', montant:  24656.57, desc:'CONV. 1BD21L0 @ 1.4195 (35 000 CAD → USD)',   compte:'1BD21M8'},
-  {id:'F004', date:'2025-11-24', type:'Dépôt',      devise:'CAD', montant:  50000.00, desc:'DEPOT SIPC - CP90104',                      compte:'1BD21L0'},
-  {id:'F005', date:'2025-12-15', type:'Dépôt',      devise:'CAD', montant:  35000.00, desc:'DEPOT SIPC - CP90104',                      compte:'1BD21L0'},
-  {id:'F006', date:'2025-12-18', type:'Intérêts',   devise:'USD', montant:      5.30, desc:'Intérêt au 16 déc',                         compte:'1BD21M8'},
-  {id:'F007', date:'2025-12-26', type:'Dividende',  devise:'USD', montant:      1.00, desc:'NVIDIA CORP (100 actions)',                  compte:'1BD21M8'},
-  {id:'F008', date:'2025-12-26', type:'Retenue',    devise:'USD', montant:     -0.15, desc:'Retenue d\'impôt — NVIDIA CORP',             compte:'1BD21M8'},
-  {id:'F009', date:'2026-03-17', type:'Dividende',  devise:'USD', montant:     13.59, desc:'SPDR SS SPDR S&P 500 / SPYM (70 actions)',   compte:'1BD21M8'},
-  {id:'F010', date:'2026-03-17', type:'Retenue',    devise:'USD', montant:     -2.04, desc:'Retenue d\'impôt — SPYM',                   compte:'1BD21M8'},
-  {id:'F011', date:'2026-03-27', type:'Dividende',  devise:'USD', montant:      9.83, desc:'INVESCO NASDAQ 100 ETF / QQQM (30 actions)', compte:'1BD21M8'},
-  {id:'F012', date:'2026-03-27', type:'Retenue',    devise:'USD', montant:     -1.47, desc:'Retenue d\'impôt — QQQM',                   compte:'1BD21M8'},
-  {id:'F013', date:'2026-03-31', type:'Dividende',  devise:'CAD', montant:     16.70, desc:'ISHARES S&PTSX CAP / XEG (100 actions)',     compte:'1BD21L0'},
-  {id:'F014', date:'2026-05-29', type:'Dépôt',      devise:'CAD', montant: 240000.00, desc:'DEPOT SIPC - CP90104',                      compte:'1BD21L0'},
-];
+// SOURCE UNIQUE : feuille Mouvements_Cash (lue via getMouvementsCash).
+// Plus aucune donnée codée en dur — le tableau se remplit au chargement.
+let fluxData = [];
+
+// Correspondance types feuille <-> interface
+const TYPE_SHEET_VERS_UI = {
+  'DEPOT':'Dépôt','RETRAIT':'Retrait','DIVIDENDE':'Dividende','INTERETS':'Intérêts',
+  'CONVERSION':'Conversion','RETENUE_IMPOT':'Retenue','TRANSFERT':'Transfert'
+};
+const TYPE_UI_VERS_SHEET = {
+  'Dépôt':'DEPOT','Retrait':'RETRAIT','Dividende':'DIVIDENDE','Intérêts':'INTERETS',
+  'Conversion':'CONVERSION','Retenue':'RETENUE_IMPOT','Transfert':'TRANSFERT'
+};
+function mapMouvementVersFlux(m){
+  return { id:m.id, date:m.date, type:TYPE_SHEET_VERS_UI[String(m.type).toUpperCase()]||m.type,
+           devise:m.devise, montant:parseFloat(m.montant)||0, desc:m.description||'', compte:m.compte||'' };
+}
+async function chargerFlux(){
+  try{
+    const r = await gsApi({action:'getMouvementsCash'});
+    if (Array.isArray(r)) {
+      fluxData = r.map(mapMouvementVersFlux).sort((a,b)=>a.date.localeCompare(b.date));
+      renderFlux();
+    }
+  }catch(e){ console.warn('chargerFlux:', e); }
+}
 let fluxView = 'tout';
-let fluxIdCounter = 15;
 
 function setFluxView(v) {
   fluxView = v;
@@ -3719,77 +3727,65 @@ function openFluxModal() {
 function closeFluxModal() {
   document.getElementById('flux-modal').style.display = 'none';
 }
-function saveFlux() {
-  const id      = 'F'+String(fluxIdCounter++).padStart(3,'0');
+async function saveFlux() {
   const type    = document.getElementById('fm-type').value;
   const devise  = document.getElementById('fm-devise').value;
   const montant = parseFloat(document.getElementById('fm-montant').value)||0;
-  const flux = {
-    id,
-    date:    document.getElementById('fm-date').value,
-    type,
-    devise,
-    montant,
-    desc:    document.getElementById('fm-desc').value,
-    compte:  document.getElementById('fm-compte').value,
-  };
-  fluxData.push(flux);
-  fluxData.sort((a,b)=>a.date.localeCompare(b.date));
+  const date    = document.getElementById('fm-date').value;
+  const desc    = document.getElementById('fm-desc').value;
+  const compte  = document.getElementById('fm-compte').value;
+  if (!date || montant === 0) { alert('Date et montant requis.'); return; }
   closeFluxModal();
-  renderFlux();
-  saveFluxToSheets();
-
-  // ── Mise à jour automatique du cash ──────────────────────────────────
-  // Tous les types qui modifient un solde liquide
-  const impacteCash = ['Dépôt','Retrait','Dividende','Intérêts','Retenue','Transfert'];
-  if (impacteCash.includes(type) && montant !== 0) {
-    adjustCash(devise, montant);
-    const msg = `Cash ${devise} ajusté de ${montant >= 0 ? '+' : ''}${f2(Math.abs(montant))}$`;
-    setSyncStatus(true, msg);
-    setTimeout(()=>setSyncStatus(true,'✓ Synchronisé'), 3000);
-  }
-  // Conversion : impacte les DEUX devises simultanément
-  // Le montant saisi est le montant entrant dans la devise choisie
-  // L'app calcule l'équivalent dans l'autre devise au taux live
-  if (type === 'Conversion' && montant !== 0) {
-    const fx = mkt.USDCAD || parseFloat(gv('c-fx','1.397'));
-    if (devise === 'USD') {
-      // USD entrant → CAD sortant
-      adjustCash('USD', montant);
-      adjustCash('CAD', -(montant * fx));
-      setSyncStatus(true, `Conversion: +${f2(montant)}$ USD / −${f2(montant*fx)}$ CAD`);
-    } else {
-      // CAD entrant → USD sortant
-      adjustCash('CAD', montant);
-      adjustCash('USD', -(montant / fx));
-      setSyncStatus(true, `Conversion: +${f2(montant)}$ CAD / −${f2(montant/fx)}$ USD`);
-    }
-    setTimeout(()=>setSyncStatus(true,'✓ Synchronisé'), 3000);
-  }
-}
-function deleteFlux(id) {
-  fluxData = fluxData.filter(f=>f.id!==id);
-  renderFlux();
-  saveFluxToSheets(); // persister uniquement sur action explicite
-}
-async function saveFluxToSheets() {
-  // Persister dans Sheets via saveCompte (clé FluxData)
-  // Ne pas appeler automatiquement depuis renderFlux — seulement depuis saveFlux/deleteFlux
+  setSyncStatus(false, 'Enregistrement…');
   try {
-    await gsApi({action:'saveCompte', FluxData: JSON.stringify(fluxData), FluxIdCounter: String(fluxIdCounter)});
-  } catch(e) { console.warn('saveFluxToSheets:', e); }
+    if (type === 'Conversion') {
+      // Une conversion touche les DEUX comptes : deux lignes dans la feuille.
+      const fx = mkt.USDCAD || parseFloat(gv('c-fx','1.397'));
+      const entrant = { action:'saveMouvementCash', date, compte:(devise==='USD'?'1BD21M8':'1BD21L0'),
+        devise, type:'CONVERSION', montant, description: desc || ('Conversion entrante @ '+fx) };
+      const sortantDevise  = (devise==='USD') ? 'CAD' : 'USD';
+      const sortantMontant = (devise==='USD') ? -(montant*fx) : -(montant/fx);
+      const sortant = { action:'saveMouvementCash', date, compte:(sortantDevise==='USD'?'1BD21M8':'1BD21L0'),
+        devise:sortantDevise, type:'CONVERSION', montant: Math.round(sortantMontant*100)/100,
+        description: (desc || 'Conversion') + ' (contrepartie @ '+fx+')' };
+      await gsApi(entrant);
+      await gsApi(sortant);
+    } else {
+      await gsApi({ action:'saveMouvementCash', date, compte, devise,
+        type: TYPE_UI_VERS_SHEET[type]||type.toUpperCase(), montant, description: desc });
+    }
+    // Le backend a relancé reconstruire() : on recharge flux + compte pour refléter le cash exact.
+    await chargerFlux();
+    await chargerCompteCash();
+    setSyncStatus(true, '✓ Flux enregistré, cash recalculé');
+  } catch(e) {
+    setSyncStatus(false, 'Erreur enregistrement flux');
+    alert('Le flux n\'a pas pu être enregistré : '+e);
+  }
+}
+async function chargerCompteCash(){
+  try{
+    const cpt = await gsApi({action:'getCompte'});
+    if (cpt && cpt.CashUSD !== undefined && cpt.CashCAD !== undefined) {
+      setCash(parseFloat(cpt.CashUSD)||0, parseFloat(cpt.CashCAD)||0);
+    }
+  }catch(e){}
+}
+async function deleteFlux(id) {
+  if (!confirm('Supprimer ce flux? Le cash sera recalculé.')) return;
+  setSyncStatus(false, 'Suppression…');
+  try {
+    await gsApi({action:'deleteMouvementCash', id: id});
+    await chargerFlux();
+    await chargerCompteCash();
+    setSyncStatus(true, '✓ Flux supprimé, cash recalculé');
+  } catch(e) { setSyncStatus(false, 'Erreur suppression'); }
 }
 async function loadFluxFromSheets(cpt) {
-  if (cpt && cpt.FluxData) {
-    try {
-      const saved = JSON.parse(cpt.FluxData);
-      if (Array.isArray(saved) && saved.length > 0) {
-        fluxData = saved;
-        fluxIdCounter = parseInt(cpt.FluxIdCounter||15);
-      }
-    } catch(e) {}
-  }
+  // Le journal vit dans la feuille Mouvements_Cash (source unique).
+  await chargerFlux();
   // Charger les snapshots de performance depuis la feuille dédiée
+// Charger les snapshots de performance depuis la feuille dédiée
   await loadPerfSnapshots(cpt);
 }
 
