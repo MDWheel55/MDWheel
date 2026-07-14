@@ -3825,6 +3825,10 @@ function setPerfView(v) {
   renderPerfChart();
 }
 
+// Seuil de rafraîchissement intra-journalier du snapshot (en CAD, devise du graphique).
+// Le snapshot du jour est réécrit dès que la valeur totale bouge de plus de ce montant.
+const SNAPSHOT_SEUIL_CAD = 2000;
+
 // Prendre/mettre à jour un snapshot quotidien
 async function maybeSnapshot(valeurUSD, valeurCAD, margePct, fx) {
   const today = dateLocale();  // date locale (Montréal), PAS UTC — évite le décalage de soirée
@@ -3839,10 +3843,12 @@ async function maybeSnapshot(valeurUSD, valeurCAD, margePct, fx) {
   };
 
   if (existingIdx >= 0) {
-    // Snapshot du jour existe déjà — mettre à jour seulement si la valeur a changé de >1%
-    const old = perfSnapshots[existingIdx];
-    const ecart = Math.abs(snap.valeurCAD - old.valeurCAD) / Math.max(1, old.valeurCAD);
-    if (ecart < 0.01) { renderPerfChart(); return; } // valeur quasi identique, rien à faire
+    // Snapshot du jour existe déjà — on le réécrit seulement si l'écart absolu dépasse le seuil.
+    // (Ancienne règle : écart relatif > 1%, soit ~5 400$ sur un compte de 540k — trop grossier
+    //  pour capter les mouvements intra-journaliers réels.)
+    const old   = perfSnapshots[existingIdx];
+    const ecart = Math.abs(snap.valeurCAD - old.valeurCAD);
+    if (ecart <= SNAPSHOT_SEUIL_CAD) { renderPerfChart(); return; } // bruit, on ne réécrit pas
     perfSnapshots[existingIdx] = snap; // remplacer
   } else {
     perfSnapshots.push(snap);
