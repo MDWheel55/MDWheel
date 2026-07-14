@@ -2678,19 +2678,33 @@ function calcMarge() {
   // VE options — coefficients de régression calibrés sur 3 snapshots Disnat (juin 2026)
   // VE par contrat = a×S + b, où S = prix live du sous-jacent (Finnhub)
   // Précision : ~0.12% d'écart vs Disnat réel
+  // NOTE : la VE est exprimée dans la DEVISE DE RÈGLEMENT du sous-jacent
+  // (XEG → CAD, tous les autres → USD). Voir deviseTicker().
   const veCoeffs = {
     'GLD|360':  {a: -104.1063, b: 51559.77},
     'QQQ|490':  {a:   -1.4729, b:  4549.23},
     'QQQ|480':  {a:   -2.1406, b:  3382.12},
     'QQQ|520':  {a:  -10.6093, b: 12359.72},
     'SPY|595':  {a:  -70.0570, b: 61675.69},
+    // XEG : calibration sur 1 seul point (Disnat, 2026-07-13 : 50 contrats, VE 40 550 CAD,
+    // S = 25,77) → constante de 811 CAD/contrat, insensible au prix. À raffiner dès
+    // qu'un 2e relevé sera disponible (il faut 2 points pour ajuster la pente « a »).
+    'XEG|20':   {a:    0.0000, b:   811.00},
   };
-  const sjPrix = {QQQ: mkt.QQQ||716, SPY: mkt.SPY||739, GLD: mkt.GLD||391, NVDA: mkt.NVDA||208};
+  const sjPrix = {QQQ: mkt.QQQ||716, SPY: mkt.SPY||739, GLD: mkt.GLD||391,
+                  NVDA: mkt.NVDA||208, XEG: mkt.XEG||25.80};
 
   const shortPos  = groupPositions(positions.filter(p => p.statut === 'short'));
-  const notionnel = shortPos.reduce((s,p) => s + parseFloat(p.strike)*100*Math.abs(parseInt(p.contrats)), 0);
+  // Notionnel exprimé en USD : les strikes des sous-jacents CAD (XEG) sont convertis.
+  const notionnel = shortPos.reduce((s,p) => {
+    const n = parseFloat(p.strike)*100*Math.abs(parseInt(p.contrats));
+    return s + (deviseTicker(p.ticker) === 'CAD' ? n/fx0 : n);
+  }, 0);
 
-  let veOptsUSD = 0;
+  // Accumulateurs SÉPARÉS par devise de règlement — on ne mélange jamais CAD et USD
+  // avant d'avoir appliqué le taux de change.
+  let veOptsNatifUSD = 0;  // VE des options réglées en USD, en USD
+  let veOptsNatifCAD = 0;  // VE des options réglées en CAD, en CAD
   shortPos.forEach(p => {
     const qty    = Math.abs(parseInt(p.contrats)||1);
     const strike = parseFloat(p.strike)||0;
@@ -2702,15 +2716,21 @@ function calcMarge() {
     // Priorité 2 : coefficients par défaut (table ci-dessus)
     const key = ticker+'|'+Math.round(strike);
     const def = veCoeffs[key];
+    let ve;
     if (posA !== null && posB !== null && S > 0) {
-      veOptsUSD += Math.max(0, (posA * S + posB) * qty);
+      ve = Math.max(0, (posA * S + posB) * qty);
     } else if (def && S > 0) {
-      veOptsUSD += Math.max(0, (def.a * S + def.b) * qty);
+      ve = Math.max(0, (def.a * S + def.b) * qty);
     } else {
-      veOptsUSD += strike * 100 * qty * 0.20; // fallback
+      ve = strike * 100 * qty * 0.20; // fallback
     }
+    // La VE calculée est dans la devise de règlement du sous-jacent, pas en USD.
+    if (deviseTicker(ticker) === 'CAD') veOptsNatifCAD += ve;
+    else                                veOptsNatifUSD += ve;
   });
-  const veOptsCAD = veOptsUSD * fx0;  // converti en CAD
+  // Conversion unique et explicite vers chaque devise d'affichage
+  const veOptsCAD = veOptsNatifCAD + veOptsNatifUSD * fx0;  // tout en CAD
+  const veOptsUSD = veOptsCAD / fx0;                        // tout en USD
 
   // Marge Disnat = VE actions + liquidités − VE options (tout en CAD)
   const margeCAD  = veActCAD_total + liqCAD_total - veOptsCAD;
@@ -3947,15 +3967,22 @@ function recalcCompte() {
   var valGLD=qGLD*pGLD;
   // Valeur IBIT
   var valIBIT = acctQty.IBIT * (mkt.IBIT||34.85);
-  // Valeur au marché des options (USD) : short = passif négatif, long = actif positif.
+  // Valeur au marché des options : short = passif négatif, long = actif positif.
   // C'est la convention Disnat (valeur des titres = actions NET des options vendues),
   // distincte du P&L flottant. Σ signe × contrats × prixActuel × 100.
-  var valOpts = positions.reduce(function(s,p){
+  // ⚠ Les primes sont libellées dans la devise de règlement du sous-jacent (XEG → CAD,
+  // le reste → USD). On accumule séparément, on convertit ensuite. Jamais l'inverse.
+  var valOptsUSD = 0;   // options réglées en USD, en USD
+  var valOptsCAD = 0;   // options réglées en CAD, en CAD
+  positions.forEach(function(p){
     var isLong = p.statut==='long'||p.statut==='long-call';
     var px     = parseFloat(p.prixActuel)||parseFloat(p.prime)||0;
     var contr  = Math.abs(parseInt(p.contrats)||0);
-    return s + (isLong?1:-1)*px*100*contr;
-  }, 0);
+    var v      = (isLong?1:-1)*px*100*contr;
+    if(deviseTicker(p.ticker)==='CAD') valOptsCAD += v; else valOptsUSD += v;
+  });
+  // Valeur totale des options, exprimée en USD (le bloc CAD passe par le taux)
+  var valOpts = valOptsUSD + valOptsCAD/fx2;
   var total = valV+valX+valS+valC+valU+valGLD+valIBIT+valOpts+cashU2+cashC2/fx2;
   var totalCAD = total * fx2;
   // Exposer pour maybeSnapshot (même valeur que les KPIs)
@@ -3970,25 +3997,31 @@ function recalcCompte() {
 
   // P&L options: pour shorts = prime_reçue - prix_rachat (positif = profit)
   // Pour longs = prix_actuel - prime_payée (positif = profit)
-  var pnlOpts = positions.reduce(function(s,p){
+  // Même règle : on sépare par devise de règlement avant toute addition.
+  var pnlOptsUSD = 0, pnlOptsCAD = 0;
+  positions.forEach(function(p){
     var isLong = p.statut==='long'||p.statut==='long-call';
     var prime  = parseFloat(p.prime)||0;
     var actuel = parseFloat(p.prixActuel)||prime;
     var contr  = Math.abs(parseInt(p.contrats)||1);
-    if(isLong) return s + (actuel-prime)*100*contr;
-    else       return s + (prime-actuel)*100*contr;
-  }, 0);
+    var v      = isLong ? (actuel-prime)*100*contr : (prime-actuel)*100*contr;
+    if(deviseTicker(p.ticker)==='CAD') pnlOptsCAD += v; else pnlOptsUSD += v;
+  });
+  var pnlOpts = pnlOptsUSD + pnlOptsCAD/fx2;  // équivalent USD
 
   var pnlActions = window._pnlActionsUSD || 0;
   // KPI Ligne 1 — Valeur & Performance
   var kpi1 = [
-    {l:'Valeur totale compte', v:'$'+fi(totalCAD), s:'~$'+fi(total)+' USD · options '+(valOpts>=0?'+':'')+fi(Math.round(valOpts))+'$', c:'g'},
+    {l:'Valeur totale compte', v:'$'+fi(totalCAD), s:'~$'+fi(total)+' USD · options '+(valOptsUSD>=0?'+':'')+fi(Math.round(valOptsUSD))+'$ USD'
+        + (Math.round(valOptsCAD)!==0 ? ' · '+(valOptsCAD>=0?'+':'')+fi(Math.round(valOptsCAD))+'$ CAD' : ''), c:'g'},
     {l:'Actions USD',          v:'$'+fi(valS+valU+valGLD+valIBIT), s:'SPYM + UBIL.U + GLD + IBIT', c:''},
     {l:'Actions CAD',          v:'$'+fi((valV+valX+valC)*fx2), s:'VEQT + XEG + CBIL · CAD', c:''},
     {l:'Cash USD',             v:'$'+fi(cashU2), s:'Liquidités USD disponibles', c:cashU2>=40000?'g':'a'},
     {l:'Cash CAD',             v:'$'+fi(cashC2), s:'Liquidités CAD · $'+fi(Math.round(cashC2/fx2))+' USD éq.', c:cashC2>=50000?'g':'a'},
     {l:'P&L actions',          v:(pnlActions>=0?'+':'')+fi(pnlActions)+'$ USD', s:'Gain/perte non réalisé titres', c:pnlActions>=0?'g':'r'},
-    {l:'P&L options flottant', v:(pnlOpts>=0?'+':'')+fi(pnlOpts)+'$', s:'Profit non réalisé puts vendus', c:pnlOpts>=0?'g':'r'},
+    {l:'P&L options flottant', v:(pnlOptsUSD>=0?'+':'')+fi(pnlOptsUSD)+'$ USD',
+        s:'Non réalisé · CAD '+(pnlOptsCAD>=0?'+':'')+fi(Math.round(pnlOptsCAD))+'$ · éq. total $'+fi(Math.round(pnlOpts))+' USD',
+        c:pnlOpts>=0?'g':'r'},
   ];
   var mkKpi = function(i){ return '<div class="kpi" style="flex:1;min-width:140px;max-width:200px">'+
     '<div class="kpi-l">'+i.l+'</div>'+
