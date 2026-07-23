@@ -207,10 +207,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 <nav class="nav">
   <div class="nav-logo">MD<em>Wheel</em></div>
   <button class="nav-tab active" onclick="showTab('compte',this)">Compte</button>
-  <button class="nav-tab" onclick="showTab('scenario',this)">Scénario</button>
   <button class="nav-tab" onclick="showTab('dashboard',this)">Pilotage</button>
   <button class="nav-tab" onclick="showTab('options',this)">Options</button>
   <button class="nav-tab" onclick="showTab('actions',this)">Actions</button>
+  <button class="nav-tab" onclick="showTab('scenario',this)">Scénario</button>
   <button class="nav-tab" onclick="showTab('tresorerie',this)">Trésorerie</button>
   <button class="nav-tab" onclick="showTab('parametres',this)">Paramètres</button>
   <button class="nav-tab" onclick="showTab('annexe',this)">Annexe</button>
@@ -285,6 +285,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
       <div class="cfield"><span class="cfield-label">Trailing P/E actuel</span><input class="cfield-inp" id="pe-qqq-trail" type="number" value="30.86" step="0.1" oninput="updatePE()"></div>
       <div class="cfield"><span class="cfield-label">Trailing moy. 5 ans</span><input class="cfield-inp" id="pe-qqq-trail5" type="number" value="30.3" step="0.1" oninput="updatePE()"></div>
       <div style="font-size:9px;color:var(--muted);margin-top:4px;font-family:var(--mono)">SPY: FactSet.com/earningsinsight (vendredi) · QQQ: worldperatio.com/index/nasdaq-100</div>
+    </div>
+
+    <div class="ccard">
+      <div class="ccard-title">Composition VEQT <span style="font-size:9px;color:var(--muted)">(look-through)</span></div>
+      <div class="cfield"><span class="cfield-label">États-Unis (VUN)</span><input class="cfield-inp" id="veqt-us" type="number" value="42.98" step="0.01" oninput="majVeqtMix()"> %</div>
+      <div class="cfield"><span class="cfield-label">Canada (VCN)</span><input class="cfield-inp" id="veqt-ca" type="number" value="31.38" step="0.01" oninput="majVeqtMix()"> %</div>
+      <div class="cfield"><span class="cfield-label">Intl développé (VIU)</span><input class="cfield-inp" id="veqt-intl" type="number" value="18.44" step="0.01" oninput="majVeqtMix()"> %</div>
+      <div class="cfield"><span class="cfield-label">Émergents (VEE)</span><input class="cfield-inp" id="veqt-em" type="number" value="7.20" step="0.01" oninput="majVeqtMix()"> %</div>
+      <div id="veqt-somme" style="font-family:var(--mono);font-size:10px;color:var(--green);margin-top:4px">Somme : 100.0%</div>
+      <div style="font-size:9px;color:var(--muted);margin-top:4px;font-family:var(--mono)">Vanguard rééquilibre — vérifier trimestriellement sur vanguard.ca ou TradingView</div>
     </div>
 
     <div class="ccard">
@@ -446,7 +456,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <div style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted)" id="stk-msg"></div>
   </div>
 
-  <div class="sec" style="margin-top:0">EXPOSITION PAR FACTEUR DE RISQUE <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">· actions détenues + delta des options · T-bills exclus (collatéral)</span></div>
+  <div class="sec" style="margin-top:0">DIVERSIFICATION DU PORTEFEUILLE <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">· titres détenus · T-bills exclus (collatéral)</span></div>
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+    <button class="btn btn-d" id="stk-vue-titre" style="padding:3px 12px" onclick="setStkVue('titre')">Par titre</button>
+    <button class="btn btn-p" id="stk-vue-lookthrough" style="padding:3px 12px" onclick="setStkVue('lookthrough')">Look-through</button>
+    <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">composition VEQT modifiable dans Paramètres</span>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:7px;flex-wrap:wrap">
+    <button class="btn btn-p" id="stk-vue-brique" style="padding:3px 10px" onclick="setStkVue('brique')">Par brique</button>
+    <button class="btn btn-d" id="stk-vue-look"   style="padding:3px 10px" onclick="setStkVue('look')">Look-through VEQT</button>
+    <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">VEQT éclaté : 39,6&nbsp;% US · 30,0&nbsp;% Canada · 23,6&nbsp;% intl dév. · 6,8&nbsp;% émergents</span>
+  </div>
   <div class="pil-wrap"><table class="pil-tbl" id="stk-facteurs"></table></div>
 
   <div class="sec">PORTEFEUILLE — VALEUR AU MARCHÉ</div>
@@ -968,6 +988,14 @@ async function loadAll() {
     if(cpt.MargeDispo) { const el=document.getElementById('c-marge-dispo'); if(el) el.value=cpt.MargeDispo; }
     // Restaurer les derniers prix marché connus
     // Charger les ratios P/E
+    // Composition VEQT (look-through)
+    ['us','ca','intl','em'].forEach(function(k){
+      var v=cpt['VEQT_'+k.toUpperCase()];
+      if(v!==undefined && v!=='' && !isNaN(parseFloat(v))){
+        VEQT_MIX[k]=parseFloat(v);
+        var e=document.getElementById('veqt-'+k); if(e) e.value=VEQT_MIX[k];
+      }
+    });
     if(cpt.PE_SPY_FWD)  { peData.SPY.fwd      = parseFloat(cpt.PE_SPY_FWD);  var e=document.getElementById('pe-spy-fwd');  if(e) e.value=peData.SPY.fwd; }
     if(cpt.PE_SPY_FWD5) { peData.SPY.fwdAvg5  = parseFloat(cpt.PE_SPY_FWD5); var e=document.getElementById('pe-spy-fwd5'); if(e) e.value=peData.SPY.fwdAvg5; }
     if(cpt.PE_SPY_TR)   { peData.SPY.trail     = parseFloat(cpt.PE_SPY_TR);   var e=document.getElementById('pe-spy-trail'); if(e) e.value=peData.SPY.trail; }
@@ -4202,13 +4230,19 @@ function recalcCompte() {
 
 
 // ═══════════════════════════════════════════════════════════
-//  EXPOSITION PAR FACTEUR DE RISQUE — actions + delta des options
-//  Même logique que le bloc 2 de Pilotage, mais l'assiette inclut
-//  les titres détenus. Les T-bills (CBIL/UBIL) sont EXCLUS du risque :
-//  ce sont du collatéral, pas une position directionnelle. Ils sont
-//  affichés à part, sous le total.
+//  DIVERSIFICATION DU PORTEFEUILLE — répartition des titres détenus
+//  Deux modes :
+//   · « Par titre »    : une ligne par brique achetée (VEQT reste entier)
+//   · « Look-through » : VEQT est éclaté en ses 4 sous-jacents, ce qui
+//                        révèle l'exposition géographique RÉELLE. XEG est
+//                        alors replié dans le Canada (c'est de l'action
+//                        canadienne), avec le détail en sous-ligne.
+//  Aucun delta d'options ici : c'est une vue d'allocation. Le risque
+//  optionnel vit dans le bloc 2 de Pilotage.
+//  Les T-bills (CBIL/UBIL) sont exclus du calcul : collatéral, pas
+//  une brique d'allocation. Affichés à part sous le total.
 // ═══════════════════════════════════════════════════════════
-var STK_FACTEURS = [
+var STK_CLASSES = [
   {f:'Actions US',       tickers:['SPYM'],  col:'var(--spy)'},
   {f:'Actions mondiales',tickers:['VEQT'],  col:'var(--qqq)'},
   {f:'Or',               tickers:['GLD'],   col:'var(--gld)'},
@@ -4217,54 +4251,116 @@ var STK_FACTEURS = [
 ];
 var STK_CAD = {VEQT:1, XEG:1, CBIL:1};   // titres réglés en CAD
 
+// Composition de VEQT (source : Vanguard / TradingView). Modifiable
+// dans Paramètres — Vanguard rééquilibre, donc ça dérive lentement.
+var VEQT_MIX = {us:42.98, ca:31.38, intl:18.44, em:7.20};
+var STK_VUE  = 'lookthrough';            // 'titre' | 'lookthrough'
+
 function stkValeurUSD(tk){
   var q = parseFloat(acctQty[tk])||0, p = parseFloat(mkt[tk])||0;
   var fx = mkt.USDCAD||1.41;
   var v = q*p;
   return STK_CAD[tk] ? v/fx : v;
 }
+function setStkVue(v){
+  STK_VUE = v;
+  ['titre','lookthrough'].forEach(function(k){
+    var b=document.getElementById('stk-vue-'+k);
+    if(b) b.className = 'btn ' + (k===v ? 'btn-p' : 'btn-d');
+  });
+  renderActionsFacteurs();
+}
+function majVeqtMix(){
+  var g=function(id,d){ var e=document.getElementById(id);
+    var x=e?parseFloat(e.value):NaN; return isNaN(x)?d:x; };
+  VEQT_MIX = {us:g('veqt-us',42.98), ca:g('veqt-ca',31.38),
+              intl:g('veqt-intl',18.44), em:g('veqt-em',7.20)};
+  saveField('VEQT_US',VEQT_MIX.us);   saveField('VEQT_CA',VEQT_MIX.ca);
+  saveField('VEQT_INTL',VEQT_MIX.intl); saveField('VEQT_EM',VEQT_MIX.em);
+  var s=VEQT_MIX.us+VEQT_MIX.ca+VEQT_MIX.intl+VEQT_MIX.em;
+  var w=document.getElementById('veqt-somme');
+  if(w){ w.textContent='Somme : '+s.toFixed(1)+'%';
+         w.style.color = Math.abs(s-100)<0.5 ? 'var(--green)' : 'var(--red)'; }
+  renderActionsFacteurs();
+}
+
+// Composition de VEQT — indice de référence composite Vanguard :
+// 39,6 % CRSP US Total Market · 30,0 % FTSE Canada All Cap
+// 23,6 % FTSE Developed All Cap ex Amérique du Nord · 6,8 % FTSE Emerging Markets
+// À revalider au factsheet Vanguard si l'écart devient significatif.
+var VEQT_MIX = {us:0.396, ca:0.300, intl:0.236, em:0.068};
+var stkVue = 'brique';   // 'brique' | 'look'
+
+function setStkVue(v){
+  stkVue = v;
+  ['brique','look'].forEach(function(k){
+    var b=document.getElementById('stk-vue-'+k);
+    if(b) b.className = 'btn ' + (k===v ? 'btn-p' : 'btn-d');
+  });
+  renderActionsFacteurs();
+}
 
 function renderActionsFacteurs(){
   var el = document.getElementById('stk-facteurs');
   if(!el) return;
 
-  var rows = STK_FACTEURS.map(function(F){
-    return {f:F.f, col:F.col,
-            val:F.tickers.reduce(function(t,tk){ return t + stkValeurUSD(tk); }, 0)};
-  }).filter(function(r){ return r.val>1; });
+  var V = stkValeurUSD('VEQT');
+  var rows;
+
+  if(stkVue === 'look'){
+    // VEQT éclaté selon sa composition géographique réelle
+    rows = [
+      {f:'Actions US', col:'var(--spy)', val: stkValeurUSD('SPYM') + V*VEQT_MIX.us,
+       src:'SPYM + VEQT '+(VEQT_MIX.us*100).toFixed(1)+'%'},
+      {f:'Actions Canada', col:'var(--red)', val: stkValeurUSD('XEG') + V*VEQT_MIX.ca,
+       src:'XEG (énergie) + VEQT '+(VEQT_MIX.ca*100).toFixed(1)+'%'},
+      {f:'International développé', col:'var(--qqq)', val: V*VEQT_MIX.intl,
+       src:'VEQT '+(VEQT_MIX.intl*100).toFixed(1)+'%'},
+      {f:'Marchés émergents', col:'var(--green)', val: V*VEQT_MIX.em,
+       src:'VEQT '+(VEQT_MIX.em*100).toFixed(1)+'%'},
+      {f:'Or', col:'var(--gld)', val: stkValeurUSD('GLD'), src:'GLD'},
+      {f:'Bitcoin', col:'var(--blue)', val: stkValeurUSD('IBIT'), src:'IBIT'}
+    ];
+  } else {
+    rows = STK_CLASSES.map(function(F){
+      return {f:F.f, col:F.col, src:F.tickers.join(' + '),
+              val:F.tickers.reduce(function(t,tk){ return t + stkValeurUSD(tk); }, 0)};
+    });
+  }
+  rows = rows.filter(function(r){ return r.val>1; });
 
   var tot    = rows.reduce(function(t,r){ return t+r.val; },0);
   rows.sort(function(a,b){ return b.val-a.val; });
   var tbills = stkValeurUSD('CBIL') + stkValeurUSD('UBIL');
   var avoir  = window._lastTotalUSD||0;
-  // Concentration : indice Herfindahl normalisé → « nombre effectif de paris »
-  var hhi = tot>0 ? rows.reduce(function(t,r){ var w=r.val/tot; return t+w*w; },0) : 0;
+  var hhi  = tot>0 ? rows.reduce(function(t,r){ var w=r.val/tot; return t+w*w; },0) : 0;
   var neff = hhi>0 ? 1/hhi : 0;
 
   el.innerHTML =
-    '<thead><tr><th>Facteur de risque</th><th class="pil-num">Valeur marché</th>'
-    +'<th class="pil-num">% du risque</th><th style="width:34%"></th></tr></thead><tbody>'
+    '<thead><tr><th>Classe d\'actif</th><th>Provenance</th><th class="pil-num">Valeur marché</th>'
+    +'<th class="pil-num">% du portefeuille</th><th style="width:28%"></th></tr></thead><tbody>'
     + rows.map(function(r){
         var pc = tot>0 ? r.val/tot*100 : 0;
         return '<tr><td>'+r.f+'</td>'
+          +'<td style="color:var(--muted)">'+r.src+'</td>'
           +'<td class="pil-num" style="font-weight:700">$'+fi(Math.round(r.val))+'</td>'
           +'<td class="pil-num">'+pc.toFixed(1)+'%</td>'
           +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+Math.min(100,pc).toFixed(0)
             +'%;background:'+r.col+'"></div></div></td></tr>';
       }).join('')
-    + '<tr style="border-top:1px solid var(--border)"><td style="font-weight:700">Total actifs de risque</td>'
-      +'<td class="pil-num" style="font-weight:700">$'+fi(Math.round(tot))+'</td>'
+    + '<tr style="border-top:1px solid var(--border)"><td style="font-weight:700">Total des titres détenus</td>'
+      +'<td></td><td class="pil-num" style="font-weight:700">$'+fi(Math.round(tot))+'</td>'
       +'<td class="pil-num">100%</td>'
       +'<td style="color:var(--muted)">'+(avoir>0?(tot/avoir*100).toFixed(0)+'% de l\'avoir total':'')+'</td></tr>'
-    + '<tr><td style="color:var(--muted)">T-bills · collatéral, hors risque</td>'
+    + '<tr><td style="color:var(--muted)">T-bills · collatéral, exclus du calcul</td>'
+      +'<td style="color:var(--dim)">CBIL + UBIL</td>'
       +'<td class="pil-num" style="color:var(--muted)">$'+fi(Math.round(tbills))+'</td>'
-      +'<td class="pil-num" style="color:var(--muted)">—</td>'
-      +'<td style="color:var(--dim)">CBIL + UBIL</td></tr>'
+      +'<td class="pil-num" style="color:var(--muted)">—</td><td></td></tr>'
     + '<tr><td style="color:var(--muted)">Diversification effective</td>'
+      +'<td style="color:var(--dim)">nombre effectif de paris (Herfindahl)</td>'
       +'<td class="pil-num" style="color:'+(neff>=4?'var(--green)':neff>=3?'var(--amber)':'var(--red)')+'">'
         +neff.toFixed(1)+' / '+rows.length+'</td>'
-      +'<td class="pil-num" style="color:var(--muted)">—</td>'
-      +'<td style="color:var(--dim)">nombre effectif de paris (Herfindahl)</td></tr>'
+      +'<td class="pil-num" style="color:var(--muted)">—</td><td></td></tr>'
     + '</tbody>';
 }
 
