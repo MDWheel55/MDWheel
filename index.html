@@ -205,6 +205,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 <body>
 
 <nav class="nav">
+  <div class="nav-logo">MD<em>Wheel</em></div>
   <button class="nav-tab active" onclick="showTab('compte',this)">Compte</button>
   <button class="nav-tab" onclick="showTab('scenario',this)">Scénario</button>
   <button class="nav-tab" onclick="showTab('dashboard',this)">Pilotage</button>
@@ -213,6 +214,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <button class="nav-tab" onclick="showTab('tresorerie',this)">Trésorerie</button>
   <button class="nav-tab" onclick="showTab('parametres',this)">Paramètres</button>
   <button class="nav-tab" onclick="showTab('annexe',this)">Annexe</button>
+  <div class="nav-right">
+    <span class="sync-dot" id="sync-dot"></span>
+    <span class="sync-status" id="sync-status">&mdash;</span>
+  </div>
 </nav>
 
 <!-- SCÉNARIO — simulateur de capacité -->
@@ -328,13 +333,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 
 <!-- ANNEXE — ancien tableau de bord, conservé intégralement -->
 <div class="panel" id="tab-annexe">
-  <div class="hdr-row" style="margin-top:0.5rem">
-    <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="hdate"></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-p" id="btn-ref" onclick="actualiserTout()"><span id="ri">↻</span> Actualiser tout</button>
-      <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="lupd">Jamais actualisé</div>
-    </div>
-  </div>
   <div class="mstrip" id="mstrip"></div>
   <div class="mrow">
     <span class="ml">USD/CAD</span>
@@ -508,10 +506,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 
 <div class="panel active" id="tab-compte">
   <div class="hdr-row" style="margin-top:0.5rem">
-    <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="pil-date"></div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="hdate"></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-p" onclick="actualiserTout()">&#8635; Actualiser tout</button>
-      <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="pil-upd">&mdash;</div>
+      <button class="btn btn-p" id="btn-ref" onclick="actualiserTout()"><span id="ri">↻</span> Actualiser tout</button>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="lupd">Jamais actualisé</div>
     </div>
   </div>
 
@@ -4523,8 +4521,6 @@ function renderPilotage(){
   var s     = pilotSeuils();
   var PN    = pilotPanier();
   var ref   = PN.ref;
-  var d     = document.getElementById('pil-date');
-  if(d) d.textContent = new Date().toLocaleDateString('fr-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   // Deux seuils distincts, volontairement découplés :
   //  · refRend  = rendement d'un contrat NEUF tel que simulé dans Scénario
   //               → coût d'opportunité d'un redéploiement hypothétique
@@ -4540,8 +4536,6 @@ function renderPilotage(){
   var seuilPil = (!isNaN(saisi) && saisi>0) ? saisi : seuilAuto;
   if(se) se.placeholder = seuilAuto.toFixed(0)+' auto';
   L.forEach(function(o){ pilotStatut(o, seuilPil); });
-  var lu = document.getElementById('lupd'), lu2=document.getElementById('pil-upd');
-  if(lu&&lu2){ lu2.textContent=lu.textContent; lu2.style.color=lu.style.color; }
 
   // ── 1. CAPACITÉ ──────────────────────────────────────────
   var notTot = a.notion;
