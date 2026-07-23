@@ -248,7 +248,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </div>
   </div>
   <div class="pil-wrap"><table class="pil-tbl" id="pil-cap"></table></div>
-  <div id="pil-gauges" style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:1.25rem"></div>
 
   <div class="sec">Seuil de rachat implicite &middot; ce que rapporterait ce panier</div>
   <div id="scn-seuil" style="margin-bottom:1.25rem"></div>
@@ -306,7 +305,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 <!-- PILOTAGE (nouveau tableau de bord décisionnel) -->
 <div class="panel" id="tab-dashboard">
   <!-- ══ 2. EXPOSITION ══ -->
-  <div class="sec">2 &mdash; Exposition réelle &middot; delta-équivalent</div>
+  <div class="sec">2 &mdash; État du livre &middot; limites, exposition et delta-équivalent</div>
+  <div id="pil-gauges" style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:1.25rem"></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-expo-kpi"></div>
   <div class="pil-wrap"><table class="pil-tbl" id="pil-facteurs"></table></div>
 
@@ -4227,56 +4227,44 @@ function stkValeurUSD(tk){
 function renderActionsFacteurs(){
   var el = document.getElementById('stk-facteurs');
   if(!el) return;
-  var fx = mkt.USDCAD||1.41;
-
-  // Delta-équivalent des options, par facteur
-  var dOpt = {};
-  try {
-    pilotPositions().forEach(function(o){
-      var f = (o.tk==='GLD') ? 'Or'
-            : (o.tk==='XEG') ? 'Énergie'
-            : (o.tk==='IBIT')? 'Bitcoin'
-            : 'Actions US';                       // SPY, QQQ, NVDA
-      dOpt[f] = (dOpt[f]||0) + o.deltaEq;
-    });
-  } catch(e){}
 
   var rows = STK_FACTEURS.map(function(F){
-    var act = F.tickers.reduce(function(t,tk){ return t + stkValeurUSD(tk); }, 0);
-    var opt = dOpt[F.f]||0;
-    return {f:F.f, col:F.col, act:act, opt:opt, tot:act+opt};
-  }).filter(function(r){ return Math.abs(r.tot)>1 || Math.abs(r.act)>1; });
+    return {f:F.f, col:F.col,
+            val:F.tickers.reduce(function(t,tk){ return t + stkValeurUSD(tk); }, 0)};
+  }).filter(function(r){ return r.val>1; });
 
-  var tot = rows.reduce(function(t,r){ return t+r.tot; },0);
-  rows.sort(function(a,b){ return b.tot-a.tot; });
+  var tot    = rows.reduce(function(t,r){ return t+r.val; },0);
+  rows.sort(function(a,b){ return b.val-a.val; });
   var tbills = stkValeurUSD('CBIL') + stkValeurUSD('UBIL');
   var avoir  = window._lastTotalUSD||0;
+  // Concentration : indice Herfindahl normalisé → « nombre effectif de paris »
+  var hhi = tot>0 ? rows.reduce(function(t,r){ var w=r.val/tot; return t+w*w; },0) : 0;
+  var neff = hhi>0 ? 1/hhi : 0;
 
   el.innerHTML =
-    '<thead><tr><th>Facteur de risque</th><th class="pil-num">Actions</th>'
-    +'<th class="pil-num">Δ options</th><th class="pil-num">Exposition</th>'
-    +'<th class="pil-num">% du risque</th><th style="width:24%"></th></tr></thead><tbody>'
+    '<thead><tr><th>Facteur de risque</th><th class="pil-num">Valeur marché</th>'
+    +'<th class="pil-num">% du risque</th><th style="width:34%"></th></tr></thead><tbody>'
     + rows.map(function(r){
-        var pc = tot>0 ? r.tot/tot*100 : 0;
+        var pc = tot>0 ? r.val/tot*100 : 0;
         return '<tr><td>'+r.f+'</td>'
-          +'<td class="pil-num">$'+fi(Math.round(r.act))+'</td>'
-          +'<td class="pil-num" style="color:'+(r.opt>=0?'var(--green)':'var(--red)')+'">'
-            +(Math.abs(r.opt)<1?'—':(r.opt>=0?'+':'−')+'$'+fi(Math.abs(Math.round(r.opt))))+'</td>'
-          +'<td class="pil-num" style="font-weight:700">$'+fi(Math.round(r.tot))+'</td>'
+          +'<td class="pil-num" style="font-weight:700">$'+fi(Math.round(r.val))+'</td>'
           +'<td class="pil-num">'+pc.toFixed(1)+'%</td>'
           +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+Math.min(100,pc).toFixed(0)
             +'%;background:'+r.col+'"></div></div></td></tr>';
       }).join('')
-    + '<tr style="border-top:1px solid var(--border)"><td style="font-weight:700">Total exposition au risque</td>'
-      +'<td class="pil-num"></td><td class="pil-num"></td>'
+    + '<tr style="border-top:1px solid var(--border)"><td style="font-weight:700">Total actifs de risque</td>'
       +'<td class="pil-num" style="font-weight:700">$'+fi(Math.round(tot))+'</td>'
       +'<td class="pil-num">100%</td>'
-      +'<td style="color:var(--muted)">'+(avoir>0?(tot/avoir).toFixed(2)+'× l\'avoir':'')+'</td></tr>'
-    + '<tr><td style="color:var(--muted)">T-bills (collatéral, hors risque)</td>'
+      +'<td style="color:var(--muted)">'+(avoir>0?(tot/avoir*100).toFixed(0)+'% de l\'avoir total':'')+'</td></tr>'
+    + '<tr><td style="color:var(--muted)">T-bills · collatéral, hors risque</td>'
       +'<td class="pil-num" style="color:var(--muted)">$'+fi(Math.round(tbills))+'</td>'
-      +'<td class="pil-num"></td><td class="pil-num" style="color:var(--muted)">—</td>'
       +'<td class="pil-num" style="color:var(--muted)">—</td>'
       +'<td style="color:var(--dim)">CBIL + UBIL</td></tr>'
+    + '<tr><td style="color:var(--muted)">Diversification effective</td>'
+      +'<td class="pil-num" style="color:'+(neff>=4?'var(--green)':neff>=3?'var(--amber)':'var(--red)')+'">'
+        +neff.toFixed(1)+' / '+rows.length+'</td>'
+      +'<td class="pil-num" style="color:var(--muted)">—</td>'
+      +'<td style="color:var(--dim)">nombre effectif de paris (Herfindahl)</td></tr>'
     + '</tbody>';
 }
 
@@ -4647,7 +4635,12 @@ function renderPilotage(){
   // ── 2. EXPOSITION ────────────────────────────────────────
   var st = pilotStress(L, m, -15, 15);
   var conv = Math.abs(a.deltaEq)>0 ? Math.abs(st.deltaAp)/Math.abs(a.deltaEq) : 0;
+  var margeDispo = brute*s.mx/100 - m.margeReq;
+  var margePct   = brute>0 ? m.margeReq/brute*100 : 0;
   var kp=[
+    {l:'Marge bloquée', v:'$'+fi(Math.round(m.margeReq)),
+     s:margePct.toFixed(0)+'% de $'+fi(Math.round(brute))+' brute · dispo $'+fi(Math.round(Math.max(0,margeDispo))),
+     c:margePct>=s.mx?'var(--red)':margePct>=s.mx*0.8?'var(--amber)':'var(--green)'},
     {l:'Delta-équiv (repos)', v:'$'+fi(Math.round(Math.abs(a.deltaEq))),
      s:(avoir>0?(Math.abs(a.deltaEq)/avoir).toFixed(2):'—')+'× l\'avoir',
      c:(avoir>0&&Math.abs(a.deltaEq)/avoir>s.dx)?'var(--red)':'var(--green)'},
