@@ -1603,31 +1603,52 @@ function renderDashPositions() {
 // VE = (a × prix_sous_jacent + b) × qty, coefficients calibrés sur 3 snapshots Disnat juin 2026
 // Même logique que calcMarge() — cohérence garantie entre l'affichage par position et le total
 // Pour longs et short-calls: 0 (pas de marge de put)
+// ═══════════════════════════════════════════════════════════
+//  VALEUR D'EMPRUNT DES OPTIONS — SOURCE UNIQUE
+//  VE par contrat = a×S + b, calibré sur relevés Disnat réels.
+//  La VE est exprimée dans la DEVISE DE RÈGLEMENT du sous-jacent
+//  (XEG → CAD, tous les autres → USD). Voir deviseTicker().
+//  ⚠ Ne PAS dupliquer cette table : calcValEmprunt() et calcMarge()
+//  la lisent toutes les deux. Une divergence entre les deux copies
+//  faisait afficher 20 000 $ (repli 20 %) au lieu de 40 550 CAD sur XEG.
+// ═══════════════════════════════════════════════════════════
+var VE_COEFFS = {
+  'GLD|360':  {a: -104.1063, b: 51559.77},
+  'QQQ|490':  {a:   -1.4729, b:  4549.23},
+  'QQQ|480':  {a:   -2.1406, b:  3382.12},
+  'QQQ|520':  {a:  -10.6093, b: 12359.72},
+  'SPY|595':  {a:  -70.0570, b: 61675.69},
+  // XEG : calibration sur 1 seul point (Disnat, 2026-07-13 : 50 contrats,
+  // VE 40 550 CAD, S = 25,77) → 811 CAD/contrat, insensible au prix.
+  // À raffiner dès qu'un 2e relevé sera disponible (2 points requis
+  // pour ajuster la pente « a »).
+  'XEG|20':   {a:    0.0000, b:   811.00}
+};
+// Prix du sous-jacent, avec repli si le marché n'a pas encore répondu.
+function veSpot(tk){
+  var t = String(tk||'').toUpperCase();
+  var d = {QQQ:716, SPY:739, GLD:391, NVDA:208, XEG:25.80, IBIT:35};
+  var v = parseFloat(mkt[t]);
+  return (v > 0) ? v : (d[t] || 0);
+}
+
 function calcValEmprunt(p) {
   if (p.statut !== 'short') return 0;
   const strike = parseFloat(p.strike) || 0;
   const contr  = Math.abs(parseInt(p.contrats) || 1);
   const tkr    = (p.ticker||'').toUpperCase();
-  const S      = (tkr==='QQQ'&&mkt.QQQ>0)?mkt.QQQ
-               : (tkr==='SPY'&&mkt.SPY>0)?mkt.SPY
-               : (tkr==='GLD'&&mkt.GLD>0)?mkt.GLD
-               : 0;
+  // Lookup complet : XEG et NVDA en étaient absents, ce qui forçait le repli
+  // à 20 % du notionnel (XEG 50 contrats affichait 20 000 $ au lieu de 40 550 CAD).
+  const S      = veSpot(tkr);
   if (S === 0) return Math.round(strike * 100 * contr * 0.20); // fallback sans prix
 
   // Priorité 1 : coefficients stockés dans la position (Sheets) — pour positions rollées
   const posA = (p.veA !== undefined && p.veA !== null && !isNaN(parseFloat(p.veA))) ? parseFloat(p.veA) : null;
   const posB = (p.veB !== undefined && p.veB !== null && !isNaN(parseFloat(p.veB))) ? parseFloat(p.veB) : null;
 
-  // Priorité 2 : table de coefficients par défaut (calibrés juin 2026)
-  const veCoeffsLocal = {
-    'GLD|360':  {a: -104.1063, b: 51559.77},
-    'QQQ|490':  {a:   -1.4729, b:  4549.23},
-    'QQQ|480':  {a:   -2.1406, b:  3382.12},
-    'QQQ|520':  {a:  -10.6093, b: 12359.72},
-    'SPY|595':  {a:  -70.0570, b: 61675.69},
-  };
+  // Priorité 2 : table partagée VE_COEFFS (source unique — voir plus haut)
   const key = tkr+'|'+Math.round(strike);
-  const def = veCoeffsLocal[key];
+  const def = VE_COEFFS[key];
 
   let ve;
   if (posA !== null && posB !== null) {
@@ -1684,7 +1705,7 @@ function posRow(p, showOcc) {
   );
   // Valeur d'emprunt (après DTE)
   const ve = calcValEmprunt(p);
-  const veStr = (showOcc && ve > 0) ? '<span style="color:var(--muted);font-family:var(--mono);font-size:10px">'+fi(ve)+'$</span>'
+  const veStr = (showOcc && ve > 0) ? '<span style="color:var(--muted);font-family:var(--mono);font-size:10px">'+fi(ve)+'$ '+deviseTicker(p.ticker)+'</span>'
                                      : '<span style="color:var(--muted);font-size:10px">—</span>';
   cols.push(veStr);
   if (showOcc) cols.push('<span style="font-size:9px;color:var(--muted)">'+p.occ+'</span>');
@@ -2774,19 +2795,9 @@ function calcMarge() {
   // Précision : ~0.12% d'écart vs Disnat réel
   // NOTE : la VE est exprimée dans la DEVISE DE RÈGLEMENT du sous-jacent
   // (XEG → CAD, tous les autres → USD). Voir deviseTicker().
-  const veCoeffs = {
-    'GLD|360':  {a: -104.1063, b: 51559.77},
-    'QQQ|490':  {a:   -1.4729, b:  4549.23},
-    'QQQ|480':  {a:   -2.1406, b:  3382.12},
-    'QQQ|520':  {a:  -10.6093, b: 12359.72},
-    'SPY|595':  {a:  -70.0570, b: 61675.69},
-    // XEG : calibration sur 1 seul point (Disnat, 2026-07-13 : 50 contrats, VE 40 550 CAD,
-    // S = 25,77) → constante de 811 CAD/contrat, insensible au prix. À raffiner dès
-    // qu'un 2e relevé sera disponible (il faut 2 points pour ajuster la pente « a »).
-    'XEG|20':   {a:    0.0000, b:   811.00},
-  };
-  const sjPrix = {QQQ: mkt.QQQ||716, SPY: mkt.SPY||739, GLD: mkt.GLD||391,
-                  NVDA: mkt.NVDA||208, XEG: mkt.XEG||25.80};
+  const veCoeffs = VE_COEFFS;          // source unique (voir en-tête VE_COEFFS)
+  const sjPrix = {QQQ: veSpot('QQQ'), SPY: veSpot('SPY'), GLD: veSpot('GLD'),
+                  NVDA: veSpot('NVDA'), XEG: veSpot('XEG'), IBIT: veSpot('IBIT')};
 
   const shortPos  = groupPositions(positions.filter(p => p.statut === 'short'));
   // Notionnel exprimé en USD : les strikes des sous-jacents CAD (XEG) sont convertis.
