@@ -231,20 +231,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <!-- ══ 1. CAPACITÉ ══ -->
   <div class="sec" style="margin-top:0">1 &mdash; Capacité &middot; combien puis-je vendre maintenant&nbsp;?</div>
   <div id="pil-hero"></div>
-  <div class="pil-cfg">
-    <label>Contrat de référence</label>
-    <select class="pil-inp w" id="pil-tk" onchange="renderPilotage()" style="text-align:left">
-      <option>SPY</option><option>QQQ</option><option>GLD</option><option>XEG</option>
-    </select>
-    <label>Strike</label><input class="pil-inp" id="pil-k" type="number" step="1" value="674" onchange="renderPilotage()">
-    <label>DTE</label><input class="pil-inp" id="pil-dte" type="number" step="1" value="100" onchange="renderPilotage()">
-    <label>IV %</label><input class="pil-inp" id="pil-iv" type="number" step="0.1" value="21.4" onchange="renderPilotage()">
-    <span style="margin-left:auto"></span>
-    <label>Plafonds &mdash; marge %</label><input class="pil-inp" id="pil-mx" type="number" step="1" value="50" onchange="renderPilotage()">
-    <label>&Delta;/avoir</label><input class="pil-inp" id="pil-dx" type="number" step="0.05" value="0.50" onchange="renderPilotage()">
-    <label>Not./brute</label><input class="pil-inp" id="pil-nx" type="number" step="0.1" value="3.0" onchange="renderPilotage()">
-    <label>&le;90j %</label><input class="pil-inp" id="pil-t90" type="number" step="1" value="35" onchange="renderPilotage()">
-    <label>1 échéance %</label><input class="pil-inp" id="pil-ex" type="number" step="1" value="20" onchange="renderPilotage()">
+  <div class="pil-cfg" style="display:block">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">
+      <label>Panier à simuler</label>
+      <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">qté 0 = jambe désactivée</span>
+      <span style="margin-left:auto"></span>
+      <button class="btn btn-d" style="padding:3px 10px" onclick="pilotPreset(1)">1 jambe</button>
+      <button class="btn btn-d" style="padding:3px 10px" onclick="pilotPreset(3)">Échelle 3/6/18</button>
+    </div>
+    <table class="pil-tbl"><thead><tr><th>Jambe</th><th>Ticker</th><th>Strike</th><th>DTE</th><th>IV&nbsp;%</th><th>Qté</th><th class="pil-num">&Delta;</th><th class="pil-num">Prime</th><th class="pil-num">Marge</th><th class="pil-num">Notionnel</th></tr></thead>
+    <tbody>
+    <tr><td style="color:var(--muted)">Courte</td><td><select class="pil-inp w" id="pil-tk1" onchange="renderPilotage()" style="text-align:left"><option>SPY</option><option>QQQ</option><option>GLD</option><option>XEG</option></select></td><td><input class="pil-inp" id="pil-k1" type="number" step="1" value="674" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-d1" type="number" step="1" value="100" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-v1" type="number" step="0.1" value="21.4" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-q1" type="number" step="1" min="0" value="1" onchange="renderPilotage()" style="width:46px"></td><td class="pil-num" id="pil-o1d">—</td><td class="pil-num" id="pil-o1p">—</td><td class="pil-num" id="pil-o1m">—</td><td class="pil-num" id="pil-o1n">—</td></tr>
+    <tr><td style="color:var(--muted)">Moyenne</td><td><select class="pil-inp w" id="pil-tk2" onchange="renderPilotage()" style="text-align:left"><option>SPY</option><option>QQQ</option><option>GLD</option><option>XEG</option></select></td><td><input class="pil-inp" id="pil-k2" type="number" step="1" value="660" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-d2" type="number" step="1" value="177" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-v2" type="number" step="0.1" value="24.0" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-q2" type="number" step="1" min="0" value="1" onchange="renderPilotage()" style="width:46px"></td><td class="pil-num" id="pil-o2d">—</td><td class="pil-num" id="pil-o2p">—</td><td class="pil-num" id="pil-o2m">—</td><td class="pil-num" id="pil-o2n">—</td></tr>
+    <tr><td style="color:var(--muted)">Longue</td><td><select class="pil-inp w" id="pil-tk3" onchange="renderPilotage()" style="text-align:left"><option>SPY</option><option>QQQ</option><option>GLD</option><option>XEG</option></select></td><td><input class="pil-inp" id="pil-k3" type="number" step="1" value="620" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-d3" type="number" step="1" value="513" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-v3" type="number" step="0.1" value="24.9" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-q3" type="number" step="1" min="0" value="1" onchange="renderPilotage()" style="width:46px"></td><td class="pil-num" id="pil-o3d">—</td><td class="pil-num" id="pil-o3p">—</td><td class="pil-num" id="pil-o3m">—</td><td class="pil-num" id="pil-o3n">—</td></tr>
+    </tbody><tfoot id="pil-legs-tot"></tfoot></table>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <label>Plafonds &mdash; marge %</label><input class="pil-inp" id="pil-mx" type="number" step="1" value="50" onchange="renderPilotage()">
+      <label>&Delta;/avoir</label><input class="pil-inp" id="pil-dx" type="number" step="0.05" value="0.50" onchange="renderPilotage()">
+      <label>Not./brute</label><input class="pil-inp" id="pil-nx" type="number" step="0.1" value="3.0" onchange="renderPilotage()">
+      <label>&le;90j %</label><input class="pil-inp" id="pil-t90" type="number" step="1" value="35" onchange="renderPilotage()">
+      <label>1 échéance %</label><input class="pil-inp" id="pil-ex" type="number" step="1" value="20" onchange="renderPilotage()">
+    </div>
   </div>
   <div class="pil-wrap"><table class="pil-tbl" id="pil-cap"></table></div>
   <div id="pil-gauges" style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:1.25rem"></div>
@@ -4318,26 +4325,56 @@ function pilotAgg(L){
 }
 
 // ── Contrat de référence (pour la capacité) ──
-function pilotRef(){
-  var tk = (document.getElementById('pil-tk')||{}).value || 'SPY';
-  var K  = parseFloat((document.getElementById('pil-k')||{}).value)||674;
-  var dte= parseFloat((document.getElementById('pil-dte')||{}).value)||100;
-  var iv = (parseFloat((document.getElementById('pil-iv')||{}).value)||21)/100;
-  var fx = mkt.USDCAD||1.41;
-  var cvt= (deviseTicker(tk)==='CAD')?(1/fx):1;
-  var S  = pilotSpot(tk);
-  var g  = bsGreeks('P',S,K,Math.max(dte,1)/365,iv,PILOT_R);
-  var ve = (typeof calcValEmprunt==='function')
-      ? calcValEmprunt({statut:'short',ticker:tk,strike:K,contrats:1})*cvt
-      : K*100*0.20*cvt;
-  return {
-    tk:tk, K:K, dte:dte, iv:iv, S:S,
-    prime : g? g.price*100*cvt : 0,
-    delta : g? Math.abs(g.delta) : 0,
-    deltaEq: g? Math.abs(g.delta)*100*S*cvt : 0,
-    notion: K*100*cvt,
-    ve: ve>0?ve:K*100*0.20*cvt
-  };
+// Panier à simuler : jusqu'à 3 jambes. Une jambe de qté 0 est ignorée.
+// Les agrégats renvoyés valent POUR UN PANIER COMPLET (toutes jambes, quantités incluses).
+function pilotPanier(){
+  var fx=mkt.USDCAD||1.41, g=function(id,dd){var e=document.getElementById(id);
+    var v=e?parseFloat(e.value):NaN; return isNaN(v)?dd:v;};
+  var P={legs:[], ve:0, delta:0, notion:0, prime:0, not90:0, parExpi:{}, nb:0};
+  for(var i=1;i<=3;i++){
+    var e=document.getElementById('pil-tk'+i); if(!e) continue;
+    var tk=e.value||'SPY';
+    var K=g('pil-k'+i,0), dte=g('pil-d'+i,0), iv=g('pil-v'+i,20)/100, q=Math.max(0,g('pil-q'+i,0));
+    var cvt=(deviseTicker(tk)==='CAD')?(1/fx):1, S=pilotSpot(tk);
+    var bs=(K>0&&dte>0)?bsGreeks('P',S,K,Math.max(dte,1)/365,iv,PILOT_R):null;
+    var ve1=(typeof calcValEmprunt==='function')
+        ? calcValEmprunt({statut:'short',ticker:tk,strike:K,contrats:1})*cvt : K*100*0.20*cvt;
+    if(!(ve1>0)) ve1=K*100*0.20*cvt;
+    var Lg={i:i, tk:tk, K:K, dte:dte, iv:iv, q:q, S:S, cvt:cvt,
+      delta1 : bs?Math.abs(bs.delta):0,
+      prime1 : bs?bs.price*100*cvt:0,
+      ve1    : ve1,
+      notion1: K*100*cvt,
+      deltaEq1: bs?Math.abs(bs.delta)*100*S*cvt:0};
+    Lg.actif = (q>0 && K>0 && dte>0);
+    P.legs.push(Lg);
+    if(!Lg.actif) continue;
+    P.nb+=q; P.ve+=Lg.ve1*q; P.delta+=Lg.deltaEq1*q;
+    P.notion+=Lg.notion1*q; P.prime+=Lg.prime1*q;
+    if(dte<=90) P.not90+=Lg.notion1*q;
+    // deux jambes à moins de 7 jours d'écart tombent dans la même échéance
+    var key=null;
+    for(var k in P.parExpi){ if(Math.abs(Number(k)-dte)<=7){ key=k; break; } }
+    if(key===null) key=String(Math.round(dte));
+    P.parExpi[key]=(P.parExpi[key]||0)+Lg.notion1*q;
+  }
+  // Jambe de référence pour le reste du tableau de bord : la plus courte active
+  var act=P.legs.filter(function(l){return l.actif;});
+  act.sort(function(x,y){return x.dte-y.dte;});
+  var r=act[0]||P.legs[0]||{tk:'SPY',K:0,dte:0,delta1:0,prime1:0,ve1:0,notion1:0,deltaEq1:0};
+  P.ref={tk:r.tk,K:r.K,dte:r.dte,delta:r.delta1,prime:r.prime1,ve:r.ve1,notion:r.notion1,deltaEq:r.deltaEq1};
+  return P;
+}
+
+function pilotPreset(n){
+  var v=[['SPY',674,100,21.4,1],['SPY',660,177,24.0,n>1?1:0],['SPY',620,513,24.9,n>1?1:0]];
+  for(var i=0;i<3;i++){
+    var sel=document.getElementById('pil-tk'+(i+1)); if(sel) sel.value=v[i][0];
+    ['k','d','v','q'].forEach(function(f,j){
+      var e=document.getElementById('pil-'+f+(i+1)); if(e) e.value=v[i][j+1];
+    });
+  }
+  renderPilotage();
 }
 
 function pilotSeuils(){
@@ -4356,7 +4393,8 @@ function renderPilotage(){
   var brute = m.margeReq + m.margeUSD;          // capacité brute Disnat (USD)
   var avoir = window._lastTotalUSD || 0;
   var s     = pilotSeuils();
-  var ref   = pilotRef();
+  var PN    = pilotPanier();
+  var ref   = PN.ref;
   var d     = document.getElementById('pil-date');
   if(d) d.textContent = new Date().toLocaleDateString('fr-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   var refRend = ref.ve>0 && ref.dte>0 ? (ref.prime/ref.dte*365/ref.ve*100) : 0;
@@ -4368,54 +4406,88 @@ function renderPilotage(){
   var notTot = a.notion;
   var maxExpiNom='—', maxExpiVal=0;
   Object.keys(a.parExpi).forEach(function(k){ if(a.parExpi[k]>maxExpiVal){maxExpiVal=a.parExpi[k];maxExpiNom=k;} });
-  // Échéance du contrat de référence : si elle existe déjà, on part de son notionnel
-  var refExpiVal = 0;
-  var refDate = new Date(); refDate.setDate(refDate.getDate()+ref.dte);
-  var refKey = refDate.toISOString().slice(0,10);
-  Object.keys(a.parExpi).forEach(function(k){
-    if(Math.abs((new Date(k+'T00:00:00')-refDate)/86400000)<=7) refExpiVal=Math.max(refExpiVal,a.parExpi[k]);
-  });
 
+  // Détail des jambes du panier
+  PN.legs.forEach(function(l){
+    var set=function(sfx,txt,dim){ var e=document.getElementById('pil-o'+l.i+sfx);
+      if(e){ e.innerHTML=txt; e.style.color = dim?'var(--dim)':''; } };
+    var dim=!l.actif, q=Math.max(l.q,1);
+    set('d', l.delta1?l.delta1.toFixed(2):'—', dim);
+    set('p', l.prime1?'$'+fi(Math.round(l.prime1*q)):'—', dim);
+    set('m', l.ve1?'$'+fi(Math.round(l.ve1*q)):'—', dim);
+    set('n', l.notion1?'$'+fi(Math.round(l.notion1*q)):'—', dim);
+  });
+  var tf=document.getElementById('pil-legs-tot');
+  if(tf) tf.innerHTML='<tr style="border-top:1px solid var(--border)">'
+    +'<td colspan="5" style="color:var(--muted)">1 panier complet</td>'
+    +'<td class="pil-num">'+PN.nb+'</td><td class="pil-num" style="color:var(--dim)">—</td>'
+    +'<td class="pil-num" style="color:var(--green)">$'+fi(Math.round(PN.prime))+'</td>'
+    +'<td class="pil-num">$'+fi(Math.round(PN.ve))+'</td>'
+    +'<td class="pil-num">$'+fi(Math.round(PN.notion))+'</td></tr>';
+
+  var t90=s.t90/100, ex=s.ex/100;
+  // Notionnel DÉJÀ en place sur les échéances visées par le panier (fenêtre ±10 j)
+  var expiBase={};
+  Object.keys(PN.parExpi).forEach(function(k){
+    var cible=new Date(); cible.setDate(cible.getDate()+Number(k));
+    var v=0;
+    Object.keys(a.parExpi).forEach(function(e2){
+      var dd=new Date(e2+'T00:00:00');
+      if(!isNaN(dd) && Math.abs((dd-cible)/86400000)<=10) v+=a.parExpi[e2];
+    });
+    expiBase[k]=v;
+  });
+  var lim=function(dispo,parPanier){ return parPanier>0 ? dispo/parPanier : 99; };
   var cap=[];
   cap.push({n:'Marge', d:'plafond '+s.mx+'% de la brute',
-    x: ref.ve>0 ? (brute*s.mx/100 - m.margeReq)/ref.ve : 0,
-    cur: m.margeReq, lim: brute*s.mx/100, u:'$'});
-  cap.push({n:'Delta-équivalent', d:'plafond '+s.dx.toFixed(2)+'× l\'avoir',
-    x: ref.deltaEq>0 ? (s.dx*avoir - Math.abs(a.deltaEq))/ref.deltaEq : 0,
-    cur: Math.abs(a.deltaEq), lim: s.dx*avoir, u:'$'});
+    x: lim(brute*s.mx/100 - m.margeReq, PN.ve), cur:m.margeReq, lim:brute*s.mx/100, ap:PN.ve});
+  cap.push({n:'Delta-équivalent', d:'plafond '+s.dx.toFixed(2)+"× l'avoir",
+    x: lim(s.dx*avoir - Math.abs(a.deltaEq), PN.delta), cur:Math.abs(a.deltaEq), lim:s.dx*avoir, ap:PN.delta});
   cap.push({n:'Notionnel total', d:'plafond '+s.nx.toFixed(1)+'× la brute',
-    x: ref.notion>0 ? (s.nx*brute - notTot)/ref.notion : 0,
-    cur: notTot, lim: s.nx*brute, u:'$'});
-  var t90=s.t90/100, ex=s.ex/100;
+    x: lim(s.nx*brute - notTot, PN.notion), cur:notTot, lim:s.nx*brute, ap:PN.notion});
+  // Seuils relatifs : le panier gonfle aussi le dénominateur
+  var den90 = PN.not90 - t90*PN.notion;
   cap.push({n:'Tenor ≤ 90 jours', d:'plafond '+s.t90+'% du notionnel',
-    x: (ref.dte<=90 && ref.notion>0) ? (t90*notTot - a.not90)/(ref.notion*(1-t90)) : 99,
-    cur:a.not90, lim:t90*notTot, u:'$'});
-  cap.push({n:'Une seule échéance', d:'plafond '+s.ex+'% du notionnel',
-    x: ref.notion>0 ? (ex*notTot - refExpiVal)/(ref.notion*(1-ex)) : 0,
-    cur:refExpiVal, lim:ex*notTot, u:'$'});
-  cap.forEach(function(c){ c.x = isFinite(c.x)? Math.max(0,c.x) : 0; });
+    x: den90>0 ? (t90*notTot - a.not90)/den90 : 99, cur:a.not90, lim:t90*notTot, ap:PN.not90});
+  var pireX=99, pireCur=0, pireAp=0;
+  Object.keys(PN.parExpi).forEach(function(k){
+    var den=PN.parExpi[k]-ex*PN.notion;
+    var xx = den>0 ? (ex*notTot - expiBase[k])/den : 99;
+    if(xx<pireX){ pireX=xx; pireCur=expiBase[k]; pireAp=PN.parExpi[k]; }
+  });
+  cap.push({n:'Une seule échéance', d:'plafond '+s.ex+'% du notionnel · pire jambe',
+    x:pireX, cur:pireCur, lim:ex*notTot, ap:pireAp});
+  cap.forEach(function(c){ c.x = isFinite(c.x)? Math.max(0,c.x) : 99; });
   var bind = cap.reduce(function(b,c){ return c.x<b.x ? c : b; }, cap[0]);
 
-  var col = bind.x>=3?'var(--green)':bind.x>=1?'var(--amber)':'var(--red)';
+  var passe = bind.x>=1;
+  var col = bind.x>=2?'var(--green)':passe?'var(--amber)':'var(--red)';
+  var libelle = PN.legs.filter(function(l){return l.actif;})
+    .map(function(l){ return l.tk+' '+l.K+'P·'+l.dte+'j×'+l.q; }).join('  +  ') || 'aucune jambe active';
   document.getElementById('pil-hero').innerHTML =
     '<div class="pil-hero">'
-    +'<div class="pil-hero-l">Capacité — '+ref.tk+' '+ref.K+'P · '+ref.dte+'j · Δ '+ref.delta.toFixed(2)+'</div>'
-    +'<div class="pil-hero-v" style="color:'+col+'">'+bind.x.toFixed(1)+' contrat'+(bind.x>=2?'s':'')+'</div>'
-    +'<div class="pil-hero-s">bloqué par <strong style="color:var(--text)">'+bind.n.toLowerCase()+'</strong>'
-      +' · prime ~$'+fi(Math.round(bind.x*ref.prime))+' · marge ~$'+fi(Math.round(bind.x*ref.ve))
-      +' · notionnel ~$'+fi(Math.round(bind.x*ref.notion))+'</div>'
+    +'<div class="pil-hero-l">Panier — '+libelle+'</div>'
+    +'<div class="pil-hero-v" style="color:'+col+'">'+bind.x.toFixed(1)+' panier'+(bind.x>=2?'s':'')
+      +' <span style="font-size:13px;letter-spacing:0;color:var(--muted)"> = '+(Math.floor(bind.x)*PN.nb)+' contrats entiers</span></div>'
+    +'<div class="pil-hero-s">bloqué par <strong style="color:var(--text)">'+bind.n.toLowerCase()+'</strong> · '
+      +'<span class="pil-badge '+(passe?'pil-b-ok':'pil-b-dn')+'">'+(passe?'✓ 1 panier passe':'✗ 1 panier dépasse')+'</span>'
+      +' &nbsp; 1 panier : prime $'+fi(Math.round(PN.prime))+' · marge $'+fi(Math.round(PN.ve))
+      +' · notionnel $'+fi(Math.round(PN.notion))+'</div>'
     +'</div>';
 
   document.getElementById('pil-cap').innerHTML =
-    '<thead><tr><th>Contrainte</th><th>Règle</th><th class="pil-num">Actuel</th><th class="pil-num">Plafond</th><th class="pil-num">Capacité</th></tr></thead><tbody>'
+    '<thead><tr><th>Contrainte</th><th>Règle</th><th class="pil-num">Actuel</th><th class="pil-num">+ 1 panier</th>'
+    +'<th class="pil-num">Plafond</th><th class="pil-num">Après</th><th class="pil-num">× paniers</th></tr></thead><tbody>'
     + cap.map(function(c){
-        var isB = (c===bind);
+        var isB=(c===bind);
+        var ok=(c.cur+c.ap)<=c.lim;
         return '<tr class="'+(isB?'bind':'')+'"><td>'+(isB?'▸ ':'')+c.n+'</td>'
           +'<td style="color:var(--muted)">'+c.d+'</td>'
           +'<td class="pil-num">$'+fi(Math.round(c.cur))+'</td>'
+          +'<td class="pil-num" style="color:var(--qqq)">+$'+fi(Math.round(c.ap))+'</td>'
           +'<td class="pil-num" style="color:var(--muted)">$'+fi(Math.round(c.lim))+'</td>'
-          +'<td class="pil-num" style="color:'+(isB?'var(--amber)':'var(--muted)')+'">'
-            +(c.x>90?'—':c.x.toFixed(1))+'</td></tr>';
+          +'<td class="pil-num" style="color:'+(ok?'var(--green)':'var(--red)')+'">'+(ok?'✓':'✗')+' $'+fi(Math.round(c.cur+c.ap))+'</td>'
+          +'<td class="pil-num" style="color:'+(isB?'var(--amber)':'var(--muted)')+'">'+(c.x>90?'—':c.x.toFixed(1))+'</td></tr>';
       }).join('')+'</tbody>';
 
   // Jauges
