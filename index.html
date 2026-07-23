@@ -163,6 +163,42 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 .chat-send:disabled{opacity:0.4;cursor:not-allowed;}
 .spin{display:inline-block;animation:spin 1s linear infinite;}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+/* ═══ PILOTAGE — tableau de bord décisionnel ═══ */
+.pil-hero{background:linear-gradient(180deg,var(--s2),var(--s1));border:1px solid var(--border);border-left:3px solid var(--qqq);border-radius:5px;padding:16px 18px;margin-bottom:10px;}
+.pil-hero-l{font-family:var(--mono);font-size:8px;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
+.pil-hero-v{font-family:var(--mono);font-size:34px;font-weight:700;line-height:1;letter-spacing:-0.02em;}
+.pil-hero-s{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:7px;}
+.pil-cfg{display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:8px 12px;margin-bottom:10px;}
+.pil-cfg label{font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;}
+.pil-inp{font-family:var(--mono);font-size:11px;font-weight:700;background:var(--s2);border:1px solid var(--border);border-radius:3px;color:var(--text);padding:3px 6px;width:58px;text-align:right;}
+.pil-inp:focus{outline:none;border-color:var(--qqq);}
+.pil-inp.w{width:74px;}
+.pil-tbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:10px;}
+.pil-tbl th{text-align:left;font-size:8px;letter-spacing:0.08em;color:var(--muted);text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--border);font-weight:400;white-space:nowrap;}
+.pil-tbl td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.04);white-space:nowrap;}
+.pil-tbl tr.bind td{background:rgba(255,184,48,0.07);}
+.pil-tbl tr:hover td{background:rgba(255,255,255,0.02);}
+.pil-num{text-align:right;font-weight:700;}
+.pil-wrap{background:var(--s1);border:1px solid var(--border);border-radius:4px;overflow-x:auto;margin-bottom:1.25rem;}
+.pil-gauge{display:flex;align-items:center;gap:8px;padding:5px 0;}
+.pil-gauge-l{font-family:var(--mono);font-size:9px;color:var(--muted);min-width:132px;}
+.pil-gauge-bg{flex:1;height:5px;background:var(--s3);border-radius:3px;position:relative;overflow:visible;min-width:60px;}
+.pil-gauge-f{height:5px;border-radius:3px;transition:width .4s;}
+.pil-gauge-cap{position:absolute;top:-3px;width:2px;height:11px;background:var(--text);opacity:.55;}
+.pil-gauge-v{font-family:var(--mono);font-size:10px;font-weight:700;min-width:86px;text-align:right;}
+.pil-badge{font-family:var(--mono);font-size:8px;font-weight:700;padding:2px 6px;border-radius:2px;letter-spacing:0.04em;white-space:nowrap;}
+.pil-b-ok{background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green);}
+.pil-b-wn{background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber);}
+.pil-b-dn{background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);}
+.pil-b-bl{background:var(--blue-bg);border:1px solid var(--blue-bd);color:var(--blue);}
+.pil-kpi{background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:11px 13px;}
+.pil-kpi-l{font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;}
+.pil-kpi-v{font-family:var(--mono);font-size:19px;font-weight:700;line-height:1.1;}
+.pil-kpi-s{font-size:10px;color:var(--muted);margin-top:3px;}
+.pil-note{font-family:var(--mono);font-size:9px;color:var(--muted);line-height:1.6;padding:8px 12px;background:var(--s1);border:1px solid var(--border);border-left:2px solid var(--dim);border-radius:3px;margin-bottom:1.25rem;}
+.pil-mini{height:4px;background:var(--s3);border-radius:2px;overflow:hidden;margin-top:4px;}
+.pil-mini-f{height:4px;border-radius:2px;}
+@media(max-width:600px){.pil-hero-v{font-size:25px;}.pil-gauge-l{min-width:96px;font-size:8px;}}
 @media(max-width:600px){.panel{padding:1rem;}.chat-box{width:calc(100vw - 2rem);}.fgrid{grid-template-columns:1fr;}}
 </style>
 </head>
@@ -170,19 +206,70 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 
 <nav class="nav">
   <div class="nav-logo">MD<em>Wheel</em></div>
-  <button class="nav-tab active" onclick="showTab('dashboard',this)">Tableau de bord</button>
+  <button class="nav-tab active" onclick="showTab('dashboard',this)">Pilotage</button>
   <button class="nav-tab" onclick="showTab('options',this)">Options</button>
   <button class="nav-tab" onclick="showTab('actions',this)">Actions</button>
   <button class="nav-tab" onclick="showTab('compte',this)">Compte</button>
   <button class="nav-tab" onclick="showTab('tresorerie',this)">Trésorerie</button>
+  <button class="nav-tab" onclick="showTab('annexe',this)">Annexe</button>
   <div class="nav-right">
     <span class="sync-dot" id="sync-dot"></span>
     <span class="sync-status" id="sync-status">—</span>
   </div>
 </nav>
 
-<!-- DASHBOARD -->
+<!-- PILOTAGE (nouveau tableau de bord décisionnel) -->
 <div class="panel active" id="tab-dashboard">
+  <div class="hdr-row" style="margin-top:0.5rem">
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="pil-date"></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="actualiserTout()">&#8635; Actualiser tout</button>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="pil-upd">&mdash;</div>
+    </div>
+  </div>
+
+  <!-- ══ 1. CAPACITÉ ══ -->
+  <div class="sec" style="margin-top:0">1 &mdash; Capacité &middot; combien puis-je vendre maintenant&nbsp;?</div>
+  <div id="pil-hero"></div>
+  <div class="pil-cfg">
+    <label>Contrat de référence</label>
+    <select class="pil-inp w" id="pil-tk" onchange="renderPilotage()" style="text-align:left">
+      <option>SPY</option><option>QQQ</option><option>GLD</option><option>XEG</option>
+    </select>
+    <label>Strike</label><input class="pil-inp" id="pil-k" type="number" step="1" value="674" onchange="renderPilotage()">
+    <label>DTE</label><input class="pil-inp" id="pil-dte" type="number" step="1" value="100" onchange="renderPilotage()">
+    <label>IV %</label><input class="pil-inp" id="pil-iv" type="number" step="0.1" value="21.4" onchange="renderPilotage()">
+    <span style="margin-left:auto"></span>
+    <label>Plafonds &mdash; marge %</label><input class="pil-inp" id="pil-mx" type="number" step="1" value="50" onchange="renderPilotage()">
+    <label>&Delta;/avoir</label><input class="pil-inp" id="pil-dx" type="number" step="0.05" value="0.50" onchange="renderPilotage()">
+    <label>Not./brute</label><input class="pil-inp" id="pil-nx" type="number" step="0.1" value="3.0" onchange="renderPilotage()">
+    <label>&le;90j %</label><input class="pil-inp" id="pil-t90" type="number" step="1" value="35" onchange="renderPilotage()">
+    <label>1 échéance %</label><input class="pil-inp" id="pil-ex" type="number" step="1" value="20" onchange="renderPilotage()">
+  </div>
+  <div class="pil-wrap"><table class="pil-tbl" id="pil-cap"></table></div>
+  <div id="pil-gauges" style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:1.25rem"></div>
+
+  <!-- ══ 2. EXPOSITION ══ -->
+  <div class="sec">2 &mdash; Exposition réelle &middot; delta-équivalent</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-expo-kpi"></div>
+  <div class="pil-wrap"><table class="pil-tbl" id="pil-facteurs"></table></div>
+
+  <!-- ══ 3. ÉCHÉANCES ══ -->
+  <div class="sec">3 &mdash; Calendrier des échéances &middot; concentration</div>
+  <div class="pil-wrap"><table class="pil-tbl" id="pil-expi"></table></div>
+
+  <!-- ══ 4. POSITIONS ══ -->
+  <div class="sec">4 &mdash; Positions &middot; triées par urgence puis rendement sur marge <span id="pil-ref-rend" style="text-transform:none;letter-spacing:0"></span></div>
+  <div class="pil-wrap"><table class="pil-tbl" id="pil-pos"></table></div>
+
+  <!-- ══ 5. STRESS ══ -->
+  <div class="sec">5 &mdash; Stress test &middot; après le choc, puis-je encore rouler&nbsp;?</div>
+  <div id="pil-stress" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px;margin-bottom:10px"></div>
+  <div class="pil-note" id="pil-notes"></div>
+</div>
+
+<!-- ANNEXE — ancien tableau de bord, conservé intégralement -->
+<div class="panel" id="tab-annexe">
   <div class="hdr-row" style="margin-top:0.5rem">
     <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="hdate"></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -3046,6 +3133,7 @@ function recalcDash() {
   renderPositions();
   renderDashPositions();
   renderStressTest();
+  try { renderPilotage(); } catch(e) { console.warn('pilotage:',e); }
   updateDispValues();
 }
 
@@ -4061,6 +4149,471 @@ function recalcCompte() {
   }).join('');
 
   renderActionsTable();
+}
+
+
+// ═══════════════════════════════════════════════════════════
+//  PILOTAGE — moteur de décision
+//  Grecs calculés localement par Black-Scholes : l'IV est extraite
+//  par inversion du prix marché de chaque option (bisection), puis
+//  delta/gamma/vega/theta en découlent. Aucune donnée supplémentaire
+//  n'est requise côté Sheets ni côté MarketData.
+//  Si un jour les grecs arrivent de MarketData, il suffira de les
+//  écrire dans p.delta / p.iv : pilotGreeks() les prendra en priorité.
+// ═══════════════════════════════════════════════════════════
+var PILOT_R = 0.04;   // taux sans risque annuel (approx.)
+
+function _ncdf(x){
+  var a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  var sign = x<0 ? -1 : 1;
+  x = Math.abs(x)/Math.SQRT2;
+  var t = 1/(1+p*x);
+  var y = 1-(((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t)*Math.exp(-x*x);
+  return 0.5*(1+sign*y);
+}
+function _npdf(x){ return Math.exp(-0.5*x*x)/Math.sqrt(2*Math.PI); }
+
+// type : 'C' ou 'P' — grecs d'UNE option LONGUE, par action
+function bsGreeks(type,S,K,T,sig,r){
+  if(!(S>0&&K>0&&T>0&&sig>0)) return null;
+  var isC = String(type).toUpperCase().charAt(0)==='C';
+  var sq = Math.sqrt(T);
+  var d1 = (Math.log(S/K)+(r+sig*sig/2)*T)/(sig*sq);
+  var d2 = d1-sig*sq;
+  var price = isC ? S*_ncdf(d1)-K*Math.exp(-r*T)*_ncdf(d2)
+                  : K*Math.exp(-r*T)*_ncdf(-d2)-S*_ncdf(-d1);
+  return {
+    price: price,
+    delta: isC ? _ncdf(d1) : _ncdf(d1)-1,
+    gamma: _npdf(d1)/(S*sig*sq),
+    vega : S*_npdf(d1)*sq/100,                    // $ par point d'IV, par action
+    theta: (-(S*_npdf(d1)*sig)/(2*sq)
+            + (isC ? -r*K*Math.exp(-r*T)*_ncdf(d2)
+                   :  r*K*Math.exp(-r*T)*_ncdf(-d2)))/365
+  };
+}
+// IV implicite par bisection sur le prix marché
+function bsIV(type,S,K,T,px,r){
+  if(!(S>0&&K>0&&T>0&&px>0)) return 0;
+  var lo=0.005, hi=4.0, mid=0.25, g;
+  for(var i=0;i<70;i++){
+    mid=(lo+hi)/2;
+    g=bsGreeks(type,S,K,T,mid,r);
+    if(!g) return 0;
+    if(g.price>px) hi=mid; else lo=mid;
+  }
+  return (mid>0.006 && mid<3.9) ? mid : 0;
+}
+function pilotSpot(tk){
+  tk=String(tk||'').toUpperCase();
+  var t={QQQ:mkt.QQQ,SPY:mkt.SPY,GLD:mkt.GLD,NVDA:mkt.NVDA,XEG:mkt.XEG,IBIT:mkt.IBIT};
+  return parseFloat(t[tk])||0;
+}
+function pilotIsCall(p){
+  var t=String(p.type||'').toUpperCase();
+  return t.charAt(0)==='C' || p.statut==='short-call' || p.statut==='long-call';
+}
+// Marge Reg-T d'un put/call nu vendu — sert de FORME pour le stress.
+// Le NIVEAU reste celui de Disnat : on calibre par un facteur VE/RegT.
+function regT(isCall,S,K,px){
+  var otm = isCall ? Math.max(0,K-S) : Math.max(0,S-K);
+  return Math.max(0.20*S-otm, 0.10*K)*100 + px*100;
+}
+// Date d'ouverture depuis Trades_Options (pour la règle mi-DTE)
+function pilotOpenDate(p){
+  var lst=(typeof tradesCache!=='undefined'&&tradesCache)?tradesCache:[];
+  var hits=lst.filter(function(t){
+    return String(t.ticker||'').toUpperCase()===String(p.ticker||'').toUpperCase()
+      && Math.abs((parseFloat(t.strike)||0)-(parseFloat(p.strike)||0))<0.01
+      && String(t.expiration||'')===String(p.expiration||'')
+      && ['STO','BTO'].indexOf(String(t.action||'').toUpperCase())>=0;
+  });
+  if(!hits.length) return null;
+  hits.sort(function(a,b){ return String(a.date)<String(b.date)?-1:1; });
+  return hits[0].date||null;
+}
+
+// ── Enrichissement de chaque position ──
+function pilotPositions(){
+  var fx = mkt.USDCAD || 1.41;
+  return groupPositions(positions.filter(function(p){
+    return p.statut && p.statut!=='stock';
+  })).map(function(p){
+    var tk    = String(p.ticker||'').toUpperCase();
+    var isLg  = (p.statut==='long'||p.statut==='long-call');
+    var isC   = pilotIsCall(p);
+    var K     = parseFloat(p.strike)||0;
+    var S     = pilotSpot(tk);
+    var dte   = getDTE(p);
+    var T     = Math.max(dte,1)/365;
+    var prime = parseFloat(p.prime)||0;
+    var px    = parseFloat(p.prixActuel)||prime;
+    var qty   = Math.abs(parseInt(p.contrats)||1);
+    var cvt   = (deviseTicker(tk)==='CAD') ? (1/fx) : 1;   // → USD
+    var sgn   = isLg ? 1 : -1;
+
+    var iv = (p.iv && parseFloat(p.iv)>0) ? parseFloat(p.iv)/100 : bsIV(isC?'C':'P',S,K,T,px,PILOT_R);
+    var g  = iv>0 ? bsGreeks(isC?'C':'P',S,K,T,iv,PILOT_R) : null;
+    var dOpt = g ? g.delta : 0;
+
+    var ve   = (typeof calcValEmprunt==='function' && !isLg) ? (calcValEmprunt(p)*cvt) : 0;
+    var jour = (!isLg && dte>0) ? (px*100*qty*cvt/dte) : 0;
+    var op   = pilotOpenDate(p);
+    var dteO = null;
+    if(op && p.expiration){
+      var d0=new Date(op+'T00:00:00'), d1=new Date(p.expiration+'T00:00:00');
+      if(!isNaN(d0)&&!isNaN(d1)) dteO=Math.max(1,Math.round((d1-d0)/86400000));
+    }
+    var capt = (!isLg && prime>0) ? (1-px/prime)*100 : null;
+    var miDTE = (dteO!=null) ? (dte<=dteO/2) : false;
+
+    var o = {
+      p:p, tk:tk, isLong:isLg, isCall:isC, K:K, S:S, dte:dte, T:T, qty:qty, px:px, prime:prime,
+      iv:iv, cvt:cvt, sgn:sgn, expiration:p.expiration||'',
+      notion : K*100*qty*cvt,
+      dOpt   : dOpt,
+      dPos   : sgn*dOpt*qty,
+      deltaEq: sgn*dOpt*qty*100*S*cvt,
+      vega   : sgn*(g?g.vega:0)*100*qty*cvt,
+      gamma  : sgn*(g?g.gamma:0)*100*qty,
+      theta  : sgn*(g?g.theta:0)*100*qty*cvt,
+      ve:ve, jour:jour, dteO:dteO, capt:capt, miDTE:miDTE,
+      rend : ve>0 ? (jour*365/ve*100) : 0,
+      regT0: regT(isC,S,K,px)*qty*cvt
+    };
+    // statut décisionnel
+    o.mur = (o.miDTE || (capt!=null && capt>=50));   // « mûr » : mi-DTE ou 50 % capturé
+    pilotStatut(o, 0);
+    return o;
+  });
+}
+
+// Statut décisionnel. refRend = rendement/marge d'un contrat NEUF (%/an) :
+// une position mûre n'est proposée au rachat que si son résiduel rend moins.
+function pilotStatut(o, refRend){
+  var ad=Math.abs(o.dOpt);
+  if(o.isLong)                    { o.st='LONG';       o.rank=4; return; }
+  if(ad>0.35)                     { o.st='ROULER';     o.rank=0; return; }
+  if(o.mur && o.rend < refRend)   { o.st='RACHETER';   o.rank=1; return; }
+  if(ad>0.25)                     { o.st='SURVEILLER'; o.rank=2; return; }
+  o.st='OK'; o.rank=3;
+}
+
+function pilotAgg(L){
+  var a={notion:0,deltaEq:0,vega:0,gamma:0,theta:0,ve:0,jour:0,not90:0,parExpi:{},parFacteur:{}};
+  var FACT={SPY:'Actions US',QQQ:'Actions US',NVDA:'Actions US',SPYM:'Actions US',
+            GLD:'Or',XEG:'Énergie',IBIT:'Bitcoin'};
+  L.forEach(function(o){
+    a.notion+=o.notion; a.deltaEq+=o.deltaEq; a.vega+=o.vega; a.gamma+=o.gamma;
+    a.theta+=o.theta; a.ve+=o.ve; a.jour+=o.jour;
+    if(o.dte<=90) a.not90+=o.notion;
+    var e=o.expiration||'—';
+    a.parExpi[e]=(a.parExpi[e]||0)+o.notion;
+    var f=FACT[o.tk]||'Autre';
+    if(!a.parFacteur[f]) a.parFacteur[f]={notion:0,delta:0};
+    a.parFacteur[f].notion+=o.notion;
+    a.parFacteur[f].delta +=o.deltaEq;
+  });
+  return a;
+}
+
+// ── Contrat de référence (pour la capacité) ──
+function pilotRef(){
+  var tk = (document.getElementById('pil-tk')||{}).value || 'SPY';
+  var K  = parseFloat((document.getElementById('pil-k')||{}).value)||674;
+  var dte= parseFloat((document.getElementById('pil-dte')||{}).value)||100;
+  var iv = (parseFloat((document.getElementById('pil-iv')||{}).value)||21)/100;
+  var fx = mkt.USDCAD||1.41;
+  var cvt= (deviseTicker(tk)==='CAD')?(1/fx):1;
+  var S  = pilotSpot(tk);
+  var g  = bsGreeks('P',S,K,Math.max(dte,1)/365,iv,PILOT_R);
+  var ve = (typeof calcValEmprunt==='function')
+      ? calcValEmprunt({statut:'short',ticker:tk,strike:K,contrats:1})*cvt
+      : K*100*0.20*cvt;
+  return {
+    tk:tk, K:K, dte:dte, iv:iv, S:S,
+    prime : g? g.price*100*cvt : 0,
+    delta : g? Math.abs(g.delta) : 0,
+    deltaEq: g? Math.abs(g.delta)*100*S*cvt : 0,
+    notion: K*100*cvt,
+    ve: ve>0?ve:K*100*0.20*cvt
+  };
+}
+
+function pilotSeuils(){
+  var g=function(id,d){ var e=document.getElementById(id); var v=e?parseFloat(e.value):NaN; return isNaN(v)?d:v; };
+  return {mx:g('pil-mx',50), dx:g('pil-dx',0.50), nx:g('pil-nx',3.0), t90:g('pil-t90',35), ex:g('pil-ex',20)};
+}
+
+// ═══ RENDU ═══
+function renderPilotage(){
+  if(!document.getElementById('pil-hero')) return;
+  var m, L, a;
+  try { m = calcMarge(); L = pilotPositions(); a = pilotAgg(L); }
+  catch(e){ return; }
+
+  var fx    = m.fx || 1.41;
+  var brute = m.margeReq + m.margeUSD;          // capacité brute Disnat (USD)
+  var avoir = window._lastTotalUSD || 0;
+  var s     = pilotSeuils();
+  var ref   = pilotRef();
+  var d     = document.getElementById('pil-date');
+  if(d) d.textContent = new Date().toLocaleDateString('fr-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  var refRend = ref.ve>0 && ref.dte>0 ? (ref.prime/ref.dte*365/ref.ve*100) : 0;
+  L.forEach(function(o){ pilotStatut(o, refRend); });
+  var lu = document.getElementById('lupd'), lu2=document.getElementById('pil-upd');
+  if(lu&&lu2){ lu2.textContent=lu.textContent; lu2.style.color=lu.style.color; }
+
+  // ── 1. CAPACITÉ ──────────────────────────────────────────
+  var notTot = a.notion;
+  var maxExpiNom='—', maxExpiVal=0;
+  Object.keys(a.parExpi).forEach(function(k){ if(a.parExpi[k]>maxExpiVal){maxExpiVal=a.parExpi[k];maxExpiNom=k;} });
+  // Échéance du contrat de référence : si elle existe déjà, on part de son notionnel
+  var refExpiVal = 0;
+  var refDate = new Date(); refDate.setDate(refDate.getDate()+ref.dte);
+  var refKey = refDate.toISOString().slice(0,10);
+  Object.keys(a.parExpi).forEach(function(k){
+    if(Math.abs((new Date(k+'T00:00:00')-refDate)/86400000)<=7) refExpiVal=Math.max(refExpiVal,a.parExpi[k]);
+  });
+
+  var cap=[];
+  cap.push({n:'Marge', d:'plafond '+s.mx+'% de la brute',
+    x: ref.ve>0 ? (brute*s.mx/100 - m.margeReq)/ref.ve : 0,
+    cur: m.margeReq, lim: brute*s.mx/100, u:'$'});
+  cap.push({n:'Delta-équivalent', d:'plafond '+s.dx.toFixed(2)+'× l\'avoir',
+    x: ref.deltaEq>0 ? (s.dx*avoir - Math.abs(a.deltaEq))/ref.deltaEq : 0,
+    cur: Math.abs(a.deltaEq), lim: s.dx*avoir, u:'$'});
+  cap.push({n:'Notionnel total', d:'plafond '+s.nx.toFixed(1)+'× la brute',
+    x: ref.notion>0 ? (s.nx*brute - notTot)/ref.notion : 0,
+    cur: notTot, lim: s.nx*brute, u:'$'});
+  var t90=s.t90/100, ex=s.ex/100;
+  cap.push({n:'Tenor ≤ 90 jours', d:'plafond '+s.t90+'% du notionnel',
+    x: (ref.dte<=90 && ref.notion>0) ? (t90*notTot - a.not90)/(ref.notion*(1-t90)) : 99,
+    cur:a.not90, lim:t90*notTot, u:'$'});
+  cap.push({n:'Une seule échéance', d:'plafond '+s.ex+'% du notionnel',
+    x: ref.notion>0 ? (ex*notTot - refExpiVal)/(ref.notion*(1-ex)) : 0,
+    cur:refExpiVal, lim:ex*notTot, u:'$'});
+  cap.forEach(function(c){ c.x = isFinite(c.x)? Math.max(0,c.x) : 0; });
+  var bind = cap.reduce(function(b,c){ return c.x<b.x ? c : b; }, cap[0]);
+
+  var col = bind.x>=3?'var(--green)':bind.x>=1?'var(--amber)':'var(--red)';
+  document.getElementById('pil-hero').innerHTML =
+    '<div class="pil-hero">'
+    +'<div class="pil-hero-l">Capacité — '+ref.tk+' '+ref.K+'P · '+ref.dte+'j · Δ '+ref.delta.toFixed(2)+'</div>'
+    +'<div class="pil-hero-v" style="color:'+col+'">'+bind.x.toFixed(1)+' contrat'+(bind.x>=2?'s':'')+'</div>'
+    +'<div class="pil-hero-s">bloqué par <strong style="color:var(--text)">'+bind.n.toLowerCase()+'</strong>'
+      +' · prime ~$'+fi(Math.round(bind.x*ref.prime))+' · marge ~$'+fi(Math.round(bind.x*ref.ve))
+      +' · notionnel ~$'+fi(Math.round(bind.x*ref.notion))+'</div>'
+    +'</div>';
+
+  document.getElementById('pil-cap').innerHTML =
+    '<thead><tr><th>Contrainte</th><th>Règle</th><th class="pil-num">Actuel</th><th class="pil-num">Plafond</th><th class="pil-num">Capacité</th></tr></thead><tbody>'
+    + cap.map(function(c){
+        var isB = (c===bind);
+        return '<tr class="'+(isB?'bind':'')+'"><td>'+(isB?'▸ ':'')+c.n+'</td>'
+          +'<td style="color:var(--muted)">'+c.d+'</td>'
+          +'<td class="pil-num">$'+fi(Math.round(c.cur))+'</td>'
+          +'<td class="pil-num" style="color:var(--muted)">$'+fi(Math.round(c.lim))+'</td>'
+          +'<td class="pil-num" style="color:'+(isB?'var(--amber)':'var(--muted)')+'">'
+            +(c.x>90?'—':c.x.toFixed(1))+'</td></tr>';
+      }).join('')+'</tbody>';
+
+  // Jauges
+  var gj=[
+    {l:'Marge utilisée',        v:brute>0?m.margeReq/brute*100:0,       cap:s.mx,  suf:'%'},
+    {l:'Delta-équiv / avoir',   v:avoir>0?Math.abs(a.deltaEq)/avoir*100:0, cap:s.dx*100, suf:'%'},
+    {l:'Notionnel / brute',     v:brute>0?notTot/brute*100:0,           cap:s.nx*100, suf:'%'},
+    {l:'Notionnel ≤ 90j',       v:notTot>0?a.not90/notTot*100:0,        cap:s.t90, suf:'%'},
+    {l:'Plus grosse échéance',  v:notTot>0?maxExpiVal/notTot*100:0,     cap:s.ex,  suf:'%'}
+  ];
+  document.getElementById('pil-gauges').innerHTML = gj.map(function(x){
+    var ratio=x.cap>0?x.v/x.cap:0;
+    var c = ratio>=1?'var(--red)':ratio>=0.8?'var(--amber)':'var(--green)';
+    var w = Math.min(100, x.v/Math.max(x.cap*1.35,1)*100);
+    var cp= Math.min(100, x.cap/Math.max(x.cap*1.35,1)*100);
+    return '<div class="pil-gauge"><span class="pil-gauge-l">'+x.l+'</span>'
+      +'<span class="pil-gauge-bg"><span class="pil-gauge-f" style="width:'+w+'%;background:'+c+'"></span>'
+      +'<span class="pil-gauge-cap" style="left:'+cp+'%"></span></span>'
+      +'<span class="pil-gauge-v" style="color:'+c+'">'+x.v.toFixed(0)+x.suf+' / '+x.cap.toFixed(0)+x.suf+'</span></div>';
+  }).join('');
+
+  // ── 2. EXPOSITION ────────────────────────────────────────
+  var st = pilotStress(L, m, -15, 15);
+  var conv = Math.abs(a.deltaEq)>0 ? Math.abs(st.deltaAp)/Math.abs(a.deltaEq) : 0;
+  var kp=[
+    {l:'Delta-équiv (repos)', v:'$'+fi(Math.round(Math.abs(a.deltaEq))),
+     s:(avoir>0?(Math.abs(a.deltaEq)/avoir).toFixed(2):'—')+'× l\'avoir',
+     c:(avoir>0&&Math.abs(a.deltaEq)/avoir>s.dx)?'var(--red)':'var(--green)'},
+    {l:'Delta-équiv (stressé)', v:'$'+fi(Math.round(Math.abs(st.deltaAp))),
+     s:(avoir>0?(Math.abs(st.deltaAp)/avoir).toFixed(2):'—')+'× l\'avoir · −15 % / IV +15',
+     c:'var(--amber)'},
+    {l:'Facteur de convexité', v:conv.toFixed(2)+'×',
+     s:conv>3?'livre chargé en gamma':conv>2.2?'équilibré court/long':'dominé par le long',
+     c:conv>3?'var(--red)':conv>2.2?'var(--amber)':'var(--green)'},
+    {l:'Vega du livre', v:'$'+fi(Math.round(Math.abs(a.vega)))+' /pt',
+     s:'IV +10 pts → '+(a.vega<0?'−':'+')+'$'+fi(Math.round(Math.abs(a.vega)*10)),
+     c:'var(--muted)'},
+    {l:'Thêta du livre', v:(a.theta>=0?'+':'')+'$'+fi(Math.round(a.theta))+' /j',
+     s:'~$'+fi(Math.round(a.theta*30))+' /mois · $'+fi(Math.round(a.theta*30*fx))+' CAD',
+     c:a.theta>=0?'var(--green)':'var(--red)'}
+  ];
+  document.getElementById('pil-expo-kpi').innerHTML = kp.map(function(i){
+    return '<div class="pil-kpi"><div class="pil-kpi-l">'+i.l+'</div>'
+      +'<div class="pil-kpi-v" style="color:'+i.c+'">'+i.v+'</div>'
+      +'<div class="pil-kpi-s">'+i.s+'</div></div>';
+  }).join('');
+
+  var fk=Object.keys(a.parFacteur).sort(function(x,y){
+    return Math.abs(a.parFacteur[y].delta)-Math.abs(a.parFacteur[x].delta); });
+  var dTot=fk.reduce(function(t,k){ return t+Math.abs(a.parFacteur[k].delta); },0);
+  document.getElementById('pil-facteurs').innerHTML =
+    '<thead><tr><th>Facteur de risque</th><th class="pil-num">Notionnel</th><th class="pil-num">% not.</th>'
+    +'<th class="pil-num">Delta-équiv</th><th class="pil-num">% delta</th><th style="width:26%"></th></tr></thead><tbody>'
+    + fk.map(function(k){
+        var f=a.parFacteur[k];
+        var pn=notTot>0?f.notion/notTot*100:0, pd=dTot>0?Math.abs(f.delta)/dTot*100:0;
+        var ec=pd-pn;
+        return '<tr><td>'+k+'</td>'
+          +'<td class="pil-num">$'+fi(Math.round(f.notion))+'</td>'
+          +'<td class="pil-num" style="color:var(--muted)">'+pn.toFixed(0)+'%</td>'
+          +'<td class="pil-num">$'+fi(Math.round(Math.abs(f.delta)))+'</td>'
+          +'<td class="pil-num" style="color:'+(ec>6?'var(--amber)':'var(--text)')+'">'+pd.toFixed(0)+'%</td>'
+          +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+pd.toFixed(0)+'%;background:'
+            +(ec>6?'var(--amber)':'var(--qqq)')+'"></div></div></td></tr>';
+      }).join('')+'</tbody>';
+
+  // ── 3. ÉCHÉANCES ─────────────────────────────────────────
+  var ek=Object.keys(a.parExpi).sort();
+  document.getElementById('pil-expi').innerHTML =
+    '<thead><tr><th>Échéance</th><th class="pil-num">DTE</th><th>Positions</th><th class="pil-num">Notionnel</th>'
+    +'<th class="pil-num">% total</th><th>Entre dans ≤90j</th><th style="width:20%"></th></tr></thead><tbody>'
+    + ek.map(function(k){
+        var lst=L.filter(function(o){ return (o.expiration||'—')===k; });
+        var dte=lst.length?lst[0].dte:0;
+        var pc=notTot>0?a.parExpi[k]/notTot*100:0;
+        var dep=pc>s.ex;
+        var dIn = dte>90 ? (function(){ var x=new Date(); x.setDate(x.getDate()+(dte-90));
+                    return x.toLocaleDateString('fr-CA',{day:'numeric',month:'short'}); })()
+                 : '<span style="color:var(--amber)">déjà dedans</span>';
+        return '<tr><td>'+k+'</td><td class="pil-num">'+dte+'j</td>'
+          +'<td style="color:var(--muted)">'+lst.map(function(o){return o.tk+' '+o.K+(o.isCall?'C':'P')+'×'+o.qty;}).join(' · ')+'</td>'
+          +'<td class="pil-num">$'+fi(Math.round(a.parExpi[k]))+'</td>'
+          +'<td class="pil-num" style="color:'+(dep?'var(--red)':'var(--green)')+'">'+pc.toFixed(1)+'%</td>'
+          +'<td style="color:var(--muted)">'+dIn+'</td>'
+          +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+Math.min(100,pc/Math.max(s.ex*2,1)*100).toFixed(0)+'%;background:'
+            +(dep?'var(--red)':'var(--green)')+'"></div></div></td></tr>';
+      }).join('')+'</tbody>';
+
+  // ── 4. POSITIONS ─────────────────────────────────────────
+  var rr=document.getElementById('pil-ref-rend');
+  if(rr) rr.innerHTML=' &mdash; un contrat neuf rend <strong style="color:var(--text)">'+refRend.toFixed(0)+'%/an</strong> sur marge : tout résiduel sous ce seuil coûte en occasion';
+  var BD={ROULER:'pil-b-dn',RACHETER:'pil-b-bl',SURVEILLER:'pil-b-wn',OK:'pil-b-ok',LONG:'pil-b-ok'};
+  var sorted=L.slice().sort(function(x,y){ return (x.rank-y.rank)||(x.rend-y.rend); });
+  document.getElementById('pil-pos').innerHTML =
+    '<thead><tr><th>Statut</th><th>Position</th><th class="pil-num">Qté</th><th class="pil-num">Δ opt.</th>'
+    +'<th class="pil-num">Delta-équiv</th><th class="pil-num">IV</th><th class="pil-num">$/jour</th>'
+    +'<th class="pil-num">Marge (VE)</th><th class="pil-num">Rend./marge</th><th class="pil-num">Capturé</th>'
+    +'<th class="pil-num">DTE</th></tr></thead><tbody>'
+    + sorted.map(function(o){
+        var rc2 = o.isLong ? 'var(--muted)'
+                : o.rend>=25?'var(--green)':o.rend>=12?'var(--text)':'var(--amber)';
+        return '<tr><td><span class="pil-badge '+(BD[o.st]||'pil-b-ok')+'">'+o.st+'</span></td>'
+          +'<td>'+o.tk+' '+o.K+(o.isCall?'C':'P')+' <span style="color:var(--muted)">'+o.expiration+'</span></td>'
+          +'<td class="pil-num">'+(o.isLong?'+':'−')+o.qty+'</td>'
+          +'<td class="pil-num" style="color:'+(Math.abs(o.dOpt)>0.35?'var(--red)':Math.abs(o.dOpt)>0.25?'var(--amber)':'var(--text)')+'">'
+            +(o.dOpt?o.dOpt.toFixed(2):'—')+'</td>'
+          +'<td class="pil-num">$'+fi(Math.round(Math.abs(o.deltaEq)))+'</td>'
+          +'<td class="pil-num" style="color:var(--muted)">'+(o.iv?(o.iv*100).toFixed(1)+'%':'—')+'</td>'
+          +'<td class="pil-num">'+(o.jour?'$'+o.jour.toFixed(1):'—')+'</td>'
+          +'<td class="pil-num">'+(o.ve?'$'+fi(Math.round(o.ve)):'—')+'</td>'
+          +'<td class="pil-num" style="color:'+rc2+'">'+(o.ve>0?o.rend.toFixed(0)+'%/an':'—')+'</td>'
+          +'<td class="pil-num" style="color:var(--muted)">'+(o.capt!=null?Math.round(o.capt)+'%':'—')
+            +(o.dteO?' <span style="opacity:.6">('+o.dte+'/'+o.dteO+'j)</span>':'')+'</td>'
+          +'<td class="pil-num">'+o.dte+'j</td></tr>';
+      }).join('')+'</tbody>';
+
+  // ── 5. STRESS ────────────────────────────────────────────
+  var SC=[{l:'Léger',chute:10,dv:5,c:'var(--amber)'},
+          {l:'Modéré',chute:20,dv:15,c:'#ff8c42'},
+          {l:'Sévère',chute:30,dv:30,c:'var(--red)'}];
+  // Coussin : liquider CBIL/UBIL convertit 70 % de VE en 100 % de cash → +30 % de brute
+  var coussin = (acctQty.CBIL*(mkt.CBIL||50)/fx + acctQty.UBIL*(mkt.UBIL||50))*0.30;
+  document.getElementById('pil-stress').innerHTML = SC.map(function(sc){
+    var r=pilotStress(L,m,-sc.chute,sc.dv);
+    var util = r.brute>0 ? r.veTot/r.brute*100 : 999;
+    var utilC= (r.brute+coussin)>0 ? r.veTot/(r.brute+coussin)*100 : 999;
+    var dispo= Math.max(0, r.brute*s.mx/100 - r.veTot);
+    var dispoC=Math.max(0,(r.brute+coussin)*s.mx/100 - r.veTot);
+    var nc   = ref.ve>0 ? dispo/ref.ve : 0;
+    var ncC  = ref.ve>0 ? dispoC/ref.ve : 0;
+    var ok   = ncC>=1;
+    var badge= util>=100?'⛔ APPEL DE MARGE':utilC>=s.mx?'⚠ PLAFOND DÉPASSÉ':'✓ OK';
+    var bc   = util>=100?'pil-b-dn':utilC>=s.mx?'pil-b-wn':'pil-b-ok';
+    var rows=[
+      ['P&L effet prix', (r.pnlPrix>=0?'+':'−')+'$'+fi(Math.abs(Math.round(r.pnlPrix))), r.pnlPrix>=0?'var(--green)':'var(--red)'],
+      ['P&L effet vol',  (r.pnlVol>=0?'+':'−')+'$'+fi(Math.abs(Math.round(r.pnlVol))),  r.pnlVol>=0?'var(--green)':'var(--red)'],
+      ['P&L total',      (r.pnl>=0?'+':'−')+'$'+fi(Math.abs(Math.round(r.pnl))),        r.pnl>=0?'var(--green)':'var(--red)'],
+      ['Delta-équiv',    '$'+fi(Math.round(Math.abs(r.deltaAp))), 'var(--text)'],
+      ['Marge requise',  '$'+fi(Math.round(r.veTot))+' / $'+fi(Math.round(r.brute)), 'var(--text)'],
+      ['Utilisation',    util.toFixed(0)+'%', util>=s.mx?'var(--red)':'var(--green)'],
+      ['+ coussin T-bills', utilC.toFixed(0)+'%  (+$'+fi(Math.round(coussin))+')', utilC>=s.mx?'var(--amber)':'var(--green)']
+    ].map(function(x){
+      return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px">'
+        +'<span style="color:var(--muted)">'+x[0]+'</span><span style="color:'+x[2]+'">'+x[1]+'</span></div>';
+    }).join('');
+    return '<div style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:13px 14px;border-top:3px solid '+sc.c+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">'
+        +'<span style="font-family:var(--mono);font-size:11px;font-weight:700;color:'+sc.c+'">'+sc.l.toUpperCase()+' · −'+sc.chute+'% / IV +'+sc.dv+'</span>'
+        +'<span class="pil-badge '+bc+'">'+badge+'</span></div>'
+      +rows
+      +'<div style="margin-top:9px;padding-top:8px;border-top:1px solid var(--border);font-family:var(--mono);font-size:10px">'
+        +'<div style="color:var(--muted);font-size:8px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">Puis-je encore rouler ?</div>'
+        +'<span style="font-size:16px;font-weight:700;color:'+(ok?'var(--green)':'var(--red)')+'">'
+        +ncC.toFixed(1)+' contrat'+(ncC>=2?'s':'')+'</span>'
+        +'<span style="color:var(--muted)"> dispo (dont '+nc.toFixed(1)+' sans toucher aux T-bills)</span></div>'
+      +'</div>';
+  }).join('');
+
+  document.getElementById('pil-notes').innerHTML =
+    'Grecs calculés par Black-Scholes, IV extraite par inversion du prix marché de chaque option (r = '+(PILOT_R*100).toFixed(1)+' %, dividendes non modélisés). '
+    +'La marge au repos est la VE réelle de Disnat ; sous stress, la <em>forme</em> de la réaction vient de la formule Reg-T, recalibrée sur le niveau Disnat position par position. '
+    +'Choc appliqué aux actions (QQQ, SPY, NVDA, XEG, IBIT) ; l\'or est laissé inchangé. '
+    +'Coussin T-bills = 30 % de la valeur CBIL + UBIL, soit le gain de VE si tu les convertis en cash (70 % → 100 %). '
+    +'Le plafond de marge est un seuil de sécurité, pas un budget à remplir.';
+}
+
+// Repricing complet du livre sous choc de prix + choc d'IV
+function pilotStress(L, m, chutePct, dVolPts){
+  var CHOQUE={QQQ:1,SPY:1,NVDA:1,XEG:1,IBIT:1,GLD:0};   // 0 = actif non choqué
+  var k=chutePct/100, dv=dVolPts/100, fx=m.fx||1.41;
+  var pnlPrix=0,pnlVol=0,deltaAp=0,veTot=0;
+  L.forEach(function(o){
+    var mult = (CHOQUE[o.tk]===undefined?1:CHOQUE[o.tk]);
+    var S2   = o.S*(1+k*mult);
+    var iv2  = Math.max(0.01,o.iv+dv);
+    var t    = o.isCall?'C':'P';
+    var g0=bsGreeks(t,o.S,o.K,o.T,o.iv,PILOT_R);
+    var g1=bsGreeks(t,S2 ,o.K,o.T,o.iv,PILOT_R);
+    var g2=bsGreeks(t,S2 ,o.K,o.T,iv2 ,PILOT_R);
+    if(!g0||!g1||!g2) return;
+    var mlt=o.sgn*100*o.qty*o.cvt;
+    pnlPrix += (g1.price-g0.price)*mlt;
+    pnlVol  += (g2.price-g1.price)*mlt;
+    deltaAp += o.sgn*g2.delta*o.qty*100*S2*o.cvt;
+    if(!o.isLong){
+      // niveau Disnat conservé, réaction de forme Reg-T
+      var f = o.regT0>0 ? o.ve/o.regT0 : 1;
+      veTot += regT(o.isCall,S2,o.K,g2.price)*o.qty*o.cvt*f;
+    }
+  });
+  // Brute stressée : VE actions choquées + liquidités inchangées
+  var eq = (acctQty.VEQT*(mkt.VEQT||60)*0.70/fx + acctQty.XEG*(mkt.XEG||26)*0.50/fx
+          + acctQty.SPYM*(mkt.SPYM||88)*0.70 + acctQty.IBIT*(mkt.IBIT||37)*0.70);
+  var stable = (acctQty.CBIL*(mkt.CBIL||50)*0.70/fx + acctQty.UBIL*(mkt.UBIL||50)*0.70
+              + acctQty.GLD*(mkt.GLD||375)*0.70);
+  var liq = m.cashU + m.cashC/fx;
+  return {pnlPrix:pnlPrix, pnlVol:pnlVol, pnl:pnlPrix+pnlVol, deltaAp:deltaAp,
+          veTot:veTot, brute: eq*(1+k) + stable + liq};
 }
 
 // ═══ INIT ═══
