@@ -827,10 +827,17 @@ function showTab(name, el) {
 }
 
 // ═══ GOOGLE SHEETS ═══
+// TIMEOUT OBLIGATOIRE : un fetch() vers Apps Script peut rester suspendu
+// indéfiniment (quota, redirection, cold start). Sans AbortController,
+// actualiserTout() restait bloqué sur « 4/4 Sheets... » et n'atteignait
+// jamais son bloc de rendu final.
+const GS_TIMEOUT_MS = 25000;
 async function gsApi(params, _retry) {
+  const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const tid  = ctrl ? setTimeout(() => ctrl.abort(), GS_TIMEOUT_MS) : null;
   try {
     const url = SCRIPT_URL + '?' + new URLSearchParams(params).toString();
-    const res = await fetch(url);
+    const res = await fetch(url, ctrl ? {signal: ctrl.signal} : undefined);
     const text = await res.text();
     // Apps Script renvoie parfois une page HTML (throttle/quota/redirection Google)
     // au lieu du JSON attendu — on ne plante pas sur "<!DOCTYPE ...".
@@ -843,8 +850,16 @@ async function gsApi(params, _retry) {
     if (!data.ok) throw new Error(data.error || 'Erreur Sheets');
     return data.data;
   } catch(e) {
-    setSyncStatus(false, '⚠ ' + e.message);
+    const abort = (e && (e.name === 'AbortError' || /abort/i.test(e.message||'')));
+    if (abort && !_retry) {                     // un seul réessai après timeout
+      return gsApi(params, true);
+    }
+    setSyncStatus(false, abort
+      ? '⚠ Sheets ne répond pas (' + (GS_TIMEOUT_MS/1000) + 's) — réessaie plus tard'
+      : '⚠ ' + e.message);
     return null;
+  } finally {
+    if (tid) clearTimeout(tid);
   }
 }
 
@@ -1368,7 +1383,7 @@ async function actualiserTout() {
       }
     }
     steps.sheets = true;
-  } catch(e) { setStatus('⚠ Sheets — échec','var(--amber)'); }
+  } catch(e) { setStatus('⚠ Sheets — échec','var(--amber)'); steps.sheets = false; }
 
   // ── Sauvegarder snapshot prix ──
   if(steps.marche) {
