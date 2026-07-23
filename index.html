@@ -205,29 +205,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 <body>
 
 <nav class="nav">
-  <div class="nav-logo">MD<em>Wheel</em></div>
-  <button class="nav-tab active" onclick="showTab('dashboard',this)">Pilotage</button>
+  <button class="nav-tab active" onclick="showTab('compte',this)">Compte</button>
+  <button class="nav-tab" onclick="showTab('scenario',this)">Scénario</button>
+  <button class="nav-tab" onclick="showTab('dashboard',this)">Pilotage</button>
   <button class="nav-tab" onclick="showTab('options',this)">Options</button>
   <button class="nav-tab" onclick="showTab('actions',this)">Actions</button>
-  <button class="nav-tab" onclick="showTab('compte',this)">Compte</button>
   <button class="nav-tab" onclick="showTab('tresorerie',this)">Trésorerie</button>
+  <button class="nav-tab" onclick="showTab('parametres',this)">Paramètres</button>
   <button class="nav-tab" onclick="showTab('annexe',this)">Annexe</button>
-  <div class="nav-right">
-    <span class="sync-dot" id="sync-dot"></span>
-    <span class="sync-status" id="sync-status">—</span>
-  </div>
 </nav>
 
-<!-- PILOTAGE (nouveau tableau de bord décisionnel) -->
-<div class="panel active" id="tab-dashboard">
-  <div class="hdr-row" style="margin-top:0.5rem">
-    <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="pil-date"></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-p" onclick="actualiserTout()">&#8635; Actualiser tout</button>
-      <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="pil-upd">&mdash;</div>
-    </div>
-  </div>
-
+<!-- SCÉNARIO — simulateur de capacité -->
+<div class="panel" id="tab-scenario">
   <!-- ══ 1. CAPACITÉ ══ -->
   <div class="sec" style="margin-top:0">1 &mdash; Capacité &middot; combien puis-je vendre maintenant&nbsp;?</div>
   <div id="pil-hero"></div>
@@ -256,6 +245,61 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <div class="pil-wrap"><table class="pil-tbl" id="pil-cap"></table></div>
   <div id="pil-gauges" style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:1.25rem"></div>
 
+  <div class="sec">Seuil de rachat implicite &middot; ce que rapporterait ce panier</div>
+  <div id="scn-seuil" style="margin-bottom:1.25rem"></div>
+
+</div>
+
+<!-- PARAMÈTRES -->
+<div class="panel" id="tab-parametres">
+  <div class="sec">PARAMÈTRES</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:1.5rem">
+
+    <div class="ccard">
+      <div class="ccard-title">Liquidités</div>
+      <div class="cfield"><span class="cfield-label">Cash USD</span><input class="cfield-inp" id="c-cash-usd" type="number" value="24066" oninput="saveField('CashUSD',this.value);recalcCompte();updateDispValues()"></div>
+      <div class="cfield"><span class="cfield-label">Cash CAD</span><input class="cfield-inp" id="c-cash-cad" type="number" value="73661" oninput="saveField('CashCAD',this.value);recalcCompte();updateDispValues()"></div>
+      <div class="cfield"><span class="cfield-label">Taux USD/CAD</span><input class="cfield-inp" id="c-fx" type="number" value="1.3945" step="0.0001" oninput="saveField('TauxFX',this.value);recalcCompte();updateDispValues()"></div>
+      <input type="hidden" id="c-marge" value="57.7">
+      <div class="cfield" style="border:1px solid var(--green-bd);border-radius:3px;padding:3px 6px;margin-top:4px;background:var(--green-bg)">
+        <span class="cfield-label" style="color:var(--green)">Marge Disnat calculée (USD) <span style="font-size:9px;color:var(--muted)">— formule exacte Disnat</span></span>
+        <div id="facteur-disnat-label" style="font-size:12px;color:var(--green);font-family:var(--mono);margin-top:2px;font-weight:600">—</div>
+        <div style="font-size:9px;color:var(--muted);font-family:var(--mono);margin-top:2px">VE actions + liquidités − VE options · aucun facteur empirique</div>
+      </div>
+    </div>
+
+    <div class="ccard">
+      <div class="ccard-title">Ratios P/E <span style="font-size:9px;color:var(--muted)">(FactSet — hebdomadaire)</span></div>
+      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);margin-bottom:6px">SPY / S&P 500</div>
+      <div class="cfield"><span class="cfield-label">Forward P/E actuel</span><input class="cfield-inp" id="pe-spy-fwd" type="number" value="21.1" step="0.1" oninput="updatePE()"></div>
+      <div class="cfield"><span class="cfield-label">Forward moy. 5 ans</span><input class="cfield-inp" id="pe-spy-fwd5" type="number" value="19.9" step="0.1" oninput="updatePE()"></div>
+      <div class="cfield"><span class="cfield-label">Trailing P/E actuel</span><input class="cfield-inp" id="pe-spy-trail" type="number" value="31.83" step="0.1" oninput="updatePE()"></div>
+      <div class="cfield"><span class="cfield-label">Trailing moy. 5 ans</span><input class="cfield-inp" id="pe-spy-trail5" type="number" value="24.6" step="0.1" oninput="updatePE()"></div>
+      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);margin:8px 0 6px">QQQ / Nasdaq 100</div>
+      <div class="cfield"><span class="cfield-label">Forward P/E actuel</span><input class="cfield-inp" id="pe-qqq-fwd" type="number" value="23.6" step="0.1" oninput="updatePE()"></div>
+      <div class="cfield"><span class="cfield-label">Forward moy. 5 ans</span><input class="cfield-inp" id="pe-qqq-fwd5" type="number" value="22.0" step="0.1" oninput="updatePE()"></div>
+      <div class="cfield"><span class="cfield-label">Trailing P/E actuel</span><input class="cfield-inp" id="pe-qqq-trail" type="number" value="30.86" step="0.1" oninput="updatePE()"></div>
+      <div class="cfield"><span class="cfield-label">Trailing moy. 5 ans</span><input class="cfield-inp" id="pe-qqq-trail5" type="number" value="30.3" step="0.1" oninput="updatePE()"></div>
+      <div style="font-size:9px;color:var(--muted);margin-top:4px;font-family:var(--mono)">SPY: FactSet.com/earningsinsight (vendredi) · QQQ: worldperatio.com/index/nasdaq-100</div>
+    </div>
+
+    <div class="ccard">
+      <div class="ccard-title">Taux marge Disnat</div>
+      <div class="cfield"><span class="cfield-label">VEQT-C</span><input class="cfield-inp" id="c-veqt" type="number" value="70" oninput="saveField('TauxVEQT',this.value);recalcCompte()"> %</div>
+      <div class="cfield"><span class="cfield-label">XEG-C</span><input class="cfield-inp" id="c-xeg" type="number" value="50" oninput="saveField('TauxXEG',this.value);recalcCompte()"> %</div>
+      <div class="cfield"><span class="cfield-label">SPYM-U</span><input class="cfield-inp" id="c-spym" type="number" value="70" oninput="saveField('TauxSPYM',this.value);recalcCompte()"> %</div>
+      <div class="cfield"><span class="cfield-label">CBIL-C</span><input class="cfield-inp" id="c-cbil" type="number" value="70" oninput="saveField('TauxCBIL',this.value);recalcCompte()"> %</div>
+      <div class="cfield"><span class="cfield-label">UBIL.U-C</span><input class="cfield-inp" id="c-ubil" type="number" value="70" oninput="saveField('TauxUBIL',this.value);recalcCompte()"> %</div>
+      <div class="cfield"><span class="cfield-label">GLD-U</span><input class="cfield-inp" id="c-gld" type="number" value="70" oninput="saveField('TauxGLD',this.value);recalcCompte()"> %</div>
+      <div class="cfield"><span class="cfield-label">IBIT-U <span style="font-size:9px;color:var(--amber)">(Bitcoin ETF)</span></span><input class="cfield-inp" id="c-ibit" type="number" value="70" oninput="saveField('TauxIBIT',this.value);recalcCompte()"> %</div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- PILOTAGE (nouveau tableau de bord décisionnel) -->
+<div class="panel" id="tab-dashboard">
   <!-- ══ 2. EXPOSITION ══ -->
   <div class="sec">2 &mdash; Exposition réelle &middot; delta-équivalent</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-expo-kpi"></div>
@@ -266,7 +310,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <div class="pil-wrap"><table class="pil-tbl" id="pil-expi"></table></div>
 
   <!-- ══ 4. POSITIONS ══ -->
-  <div class="sec">4 &mdash; Positions &middot; triées par urgence puis rendement sur marge <span id="pil-ref-rend" style="text-transform:none;letter-spacing:0"></span></div>
+  <div class="sec">4 &mdash; Positions &middot; triées par urgence puis rendement sur marge</div>
+  <div class="pil-cfg" style="margin-bottom:8px">
+    <label>Seuil de rachat</label>
+    <input class="pil-inp" id="pil-seuil" type="number" step="1" placeholder="auto" onchange="renderPilotage()">
+    <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">%/an sur marge bloquée</span>
+    <button class="btn btn-d" style="padding:3px 10px" onclick="pilotSeuilAuto()">Auto</button>
+    <span id="pil-ref-rend" style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-left:auto"></span>
+  </div>
   <div class="pil-wrap"><table class="pil-tbl" id="pil-pos"></table></div>
 
   <!-- ══ 5. STRESS ══ -->
@@ -397,6 +448,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <div style="margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--muted)" id="stk-msg"></div>
   </div>
 
+  <div class="sec" style="margin-top:0">EXPOSITION PAR FACTEUR DE RISQUE <span style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">· actions détenues + delta des options · T-bills exclus (collatéral)</span></div>
+  <div class="pil-wrap"><table class="pil-tbl" id="stk-facteurs"></table></div>
+
   <div class="sec">PORTEFEUILLE — VALEUR AU MARCHÉ</div>
   <div class="pwrap" style="margin-bottom:1.5rem">
     <table class="ptbl" id="stk-tbl">
@@ -452,56 +506,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
 </div>
 
-<div class="panel" id="tab-compte">
+<div class="panel active" id="tab-compte">
+  <div class="hdr-row" style="margin-top:0.5rem">
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="pil-date"></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="actualiserTout()">&#8635; Actualiser tout</button>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted)" id="pil-upd">&mdash;</div>
+    </div>
+  </div>
+
 
   <!-- LIGNE KPIs SYNTHÈSE -->
   <div class="sec">SYNTHÈSE DU COMPTE</div>
   <div id="compte-kpis" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:1.5rem"></div>
-
-  <!-- PARAMÈTRES -->
-  <div class="sec">PARAMÈTRES</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:1.5rem">
-
-    <div class="ccard">
-      <div class="ccard-title">Liquidités</div>
-      <div class="cfield"><span class="cfield-label">Cash USD</span><input class="cfield-inp" id="c-cash-usd" type="number" value="24066" oninput="saveField('CashUSD',this.value);recalcCompte();updateDispValues()"></div>
-      <div class="cfield"><span class="cfield-label">Cash CAD</span><input class="cfield-inp" id="c-cash-cad" type="number" value="73661" oninput="saveField('CashCAD',this.value);recalcCompte();updateDispValues()"></div>
-      <div class="cfield"><span class="cfield-label">Taux USD/CAD</span><input class="cfield-inp" id="c-fx" type="number" value="1.3945" step="0.0001" oninput="saveField('TauxFX',this.value);recalcCompte();updateDispValues()"></div>
-      <input type="hidden" id="c-marge" value="57.7">
-      <div class="cfield" style="border:1px solid var(--green-bd);border-radius:3px;padding:3px 6px;margin-top:4px;background:var(--green-bg)">
-        <span class="cfield-label" style="color:var(--green)">Marge Disnat calculée (USD) <span style="font-size:9px;color:var(--muted)">— formule exacte Disnat</span></span>
-        <div id="facteur-disnat-label" style="font-size:12px;color:var(--green);font-family:var(--mono);margin-top:2px;font-weight:600">—</div>
-        <div style="font-size:9px;color:var(--muted);font-family:var(--mono);margin-top:2px">VE actions + liquidités − VE options · aucun facteur empirique</div>
-      </div>
-    </div>
-
-    <div class="ccard">
-      <div class="ccard-title">Ratios P/E <span style="font-size:9px;color:var(--muted)">(FactSet — hebdomadaire)</span></div>
-      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);margin-bottom:6px">SPY / S&P 500</div>
-      <div class="cfield"><span class="cfield-label">Forward P/E actuel</span><input class="cfield-inp" id="pe-spy-fwd" type="number" value="21.1" step="0.1" oninput="updatePE()"></div>
-      <div class="cfield"><span class="cfield-label">Forward moy. 5 ans</span><input class="cfield-inp" id="pe-spy-fwd5" type="number" value="19.9" step="0.1" oninput="updatePE()"></div>
-      <div class="cfield"><span class="cfield-label">Trailing P/E actuel</span><input class="cfield-inp" id="pe-spy-trail" type="number" value="31.83" step="0.1" oninput="updatePE()"></div>
-      <div class="cfield"><span class="cfield-label">Trailing moy. 5 ans</span><input class="cfield-inp" id="pe-spy-trail5" type="number" value="24.6" step="0.1" oninput="updatePE()"></div>
-      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);margin:8px 0 6px">QQQ / Nasdaq 100</div>
-      <div class="cfield"><span class="cfield-label">Forward P/E actuel</span><input class="cfield-inp" id="pe-qqq-fwd" type="number" value="23.6" step="0.1" oninput="updatePE()"></div>
-      <div class="cfield"><span class="cfield-label">Forward moy. 5 ans</span><input class="cfield-inp" id="pe-qqq-fwd5" type="number" value="22.0" step="0.1" oninput="updatePE()"></div>
-      <div class="cfield"><span class="cfield-label">Trailing P/E actuel</span><input class="cfield-inp" id="pe-qqq-trail" type="number" value="30.86" step="0.1" oninput="updatePE()"></div>
-      <div class="cfield"><span class="cfield-label">Trailing moy. 5 ans</span><input class="cfield-inp" id="pe-qqq-trail5" type="number" value="30.3" step="0.1" oninput="updatePE()"></div>
-      <div style="font-size:9px;color:var(--muted);margin-top:4px;font-family:var(--mono)">SPY: FactSet.com/earningsinsight (vendredi) · QQQ: worldperatio.com/index/nasdaq-100</div>
-    </div>
-
-    <div class="ccard">
-      <div class="ccard-title">Taux marge Disnat</div>
-      <div class="cfield"><span class="cfield-label">VEQT-C</span><input class="cfield-inp" id="c-veqt" type="number" value="70" oninput="saveField('TauxVEQT',this.value);recalcCompte()"> %</div>
-      <div class="cfield"><span class="cfield-label">XEG-C</span><input class="cfield-inp" id="c-xeg" type="number" value="50" oninput="saveField('TauxXEG',this.value);recalcCompte()"> %</div>
-      <div class="cfield"><span class="cfield-label">SPYM-U</span><input class="cfield-inp" id="c-spym" type="number" value="70" oninput="saveField('TauxSPYM',this.value);recalcCompte()"> %</div>
-      <div class="cfield"><span class="cfield-label">CBIL-C</span><input class="cfield-inp" id="c-cbil" type="number" value="70" oninput="saveField('TauxCBIL',this.value);recalcCompte()"> %</div>
-      <div class="cfield"><span class="cfield-label">UBIL.U-C</span><input class="cfield-inp" id="c-ubil" type="number" value="70" oninput="saveField('TauxUBIL',this.value);recalcCompte()"> %</div>
-      <div class="cfield"><span class="cfield-label">GLD-U</span><input class="cfield-inp" id="c-gld" type="number" value="70" oninput="saveField('TauxGLD',this.value);recalcCompte()"> %</div>
-      <div class="cfield"><span class="cfield-label">IBIT-U <span style="font-size:9px;color:var(--amber)">(Bitcoin ETF)</span></span><input class="cfield-inp" id="c-ibit" type="number" value="70" oninput="saveField('TauxIBIT',this.value);recalcCompte()"> %</div>
-    </div>
-
-  </div>
 
   <!-- REVENU MENSUEL -->
   <div class="sec">REVENU PASSIF MENSUEL ESTIMÉ</div>
@@ -3167,6 +3184,7 @@ function recalcDash() {
   renderDashPositions();
   renderStressTest();
   try { renderPilotage(); } catch(e) { console.warn('pilotage:',e); }
+  try { renderActionsFacteurs(); } catch(e) { console.warn('facteurs actions:',e); }
   updateDispValues();
 }
 
@@ -4186,6 +4204,85 @@ function recalcCompte() {
 
 
 // ═══════════════════════════════════════════════════════════
+//  EXPOSITION PAR FACTEUR DE RISQUE — actions + delta des options
+//  Même logique que le bloc 2 de Pilotage, mais l'assiette inclut
+//  les titres détenus. Les T-bills (CBIL/UBIL) sont EXCLUS du risque :
+//  ce sont du collatéral, pas une position directionnelle. Ils sont
+//  affichés à part, sous le total.
+// ═══════════════════════════════════════════════════════════
+var STK_FACTEURS = [
+  {f:'Actions US',       tickers:['SPYM'],  col:'var(--spy)'},
+  {f:'Actions mondiales',tickers:['VEQT'],  col:'var(--qqq)'},
+  {f:'Or',               tickers:['GLD'],   col:'var(--gld)'},
+  {f:'Énergie',          tickers:['XEG'],   col:'var(--amber)'},
+  {f:'Bitcoin',          tickers:['IBIT'],  col:'var(--blue)'}
+];
+var STK_CAD = {VEQT:1, XEG:1, CBIL:1};   // titres réglés en CAD
+
+function stkValeurUSD(tk){
+  var q = parseFloat(acctQty[tk])||0, p = parseFloat(mkt[tk])||0;
+  var fx = mkt.USDCAD||1.41;
+  var v = q*p;
+  return STK_CAD[tk] ? v/fx : v;
+}
+
+function renderActionsFacteurs(){
+  var el = document.getElementById('stk-facteurs');
+  if(!el) return;
+  var fx = mkt.USDCAD||1.41;
+
+  // Delta-équivalent des options, par facteur
+  var dOpt = {};
+  try {
+    pilotPositions().forEach(function(o){
+      var f = (o.tk==='GLD') ? 'Or'
+            : (o.tk==='XEG') ? 'Énergie'
+            : (o.tk==='IBIT')? 'Bitcoin'
+            : 'Actions US';                       // SPY, QQQ, NVDA
+      dOpt[f] = (dOpt[f]||0) + o.deltaEq;
+    });
+  } catch(e){}
+
+  var rows = STK_FACTEURS.map(function(F){
+    var act = F.tickers.reduce(function(t,tk){ return t + stkValeurUSD(tk); }, 0);
+    var opt = dOpt[F.f]||0;
+    return {f:F.f, col:F.col, act:act, opt:opt, tot:act+opt};
+  }).filter(function(r){ return Math.abs(r.tot)>1 || Math.abs(r.act)>1; });
+
+  var tot = rows.reduce(function(t,r){ return t+r.tot; },0);
+  rows.sort(function(a,b){ return b.tot-a.tot; });
+  var tbills = stkValeurUSD('CBIL') + stkValeurUSD('UBIL');
+  var avoir  = window._lastTotalUSD||0;
+
+  el.innerHTML =
+    '<thead><tr><th>Facteur de risque</th><th class="pil-num">Actions</th>'
+    +'<th class="pil-num">Δ options</th><th class="pil-num">Exposition</th>'
+    +'<th class="pil-num">% du risque</th><th style="width:24%"></th></tr></thead><tbody>'
+    + rows.map(function(r){
+        var pc = tot>0 ? r.tot/tot*100 : 0;
+        return '<tr><td>'+r.f+'</td>'
+          +'<td class="pil-num">$'+fi(Math.round(r.act))+'</td>'
+          +'<td class="pil-num" style="color:'+(r.opt>=0?'var(--green)':'var(--red)')+'">'
+            +(Math.abs(r.opt)<1?'—':(r.opt>=0?'+':'−')+'$'+fi(Math.abs(Math.round(r.opt))))+'</td>'
+          +'<td class="pil-num" style="font-weight:700">$'+fi(Math.round(r.tot))+'</td>'
+          +'<td class="pil-num">'+pc.toFixed(1)+'%</td>'
+          +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+Math.min(100,pc).toFixed(0)
+            +'%;background:'+r.col+'"></div></div></td></tr>';
+      }).join('')
+    + '<tr style="border-top:1px solid var(--border)"><td style="font-weight:700">Total exposition au risque</td>'
+      +'<td class="pil-num"></td><td class="pil-num"></td>'
+      +'<td class="pil-num" style="font-weight:700">$'+fi(Math.round(tot))+'</td>'
+      +'<td class="pil-num">100%</td>'
+      +'<td style="color:var(--muted)">'+(avoir>0?(tot/avoir).toFixed(2)+'× l\'avoir':'')+'</td></tr>'
+    + '<tr><td style="color:var(--muted)">T-bills (collatéral, hors risque)</td>'
+      +'<td class="pil-num" style="color:var(--muted)">$'+fi(Math.round(tbills))+'</td>'
+      +'<td class="pil-num"></td><td class="pil-num" style="color:var(--muted)">—</td>'
+      +'<td class="pil-num" style="color:var(--muted)">—</td>'
+      +'<td style="color:var(--dim)">CBIL + UBIL</td></tr>'
+    + '</tbody>';
+}
+
+// ═══════════════════════════════════════════════════════════
 //  PILOTAGE — moteur de décision
 //  Grecs calculés localement par Black-Scholes : l'IV est extraite
 //  par inversion du prix marché de chaque option (bisection), puis
@@ -4392,6 +4489,11 @@ function pilotPanier(){
   return P;
 }
 
+function pilotSeuilAuto(){
+  var e=document.getElementById('pil-seuil'); if(e) e.value='';
+  renderPilotage();
+}
+
 function pilotPreset(n){
   var v=[['SPY',674,100,21.4,1],['SPY',660,177,24.0,n>1?1:0],['SPY',620,513,24.9,n>1?1:0]];
   for(var i=0;i<3;i++){
@@ -4423,8 +4525,21 @@ function renderPilotage(){
   var ref   = PN.ref;
   var d     = document.getElementById('pil-date');
   if(d) d.textContent = new Date().toLocaleDateString('fr-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  // Deux seuils distincts, volontairement découplés :
+  //  · refRend  = rendement d'un contrat NEUF tel que simulé dans Scénario
+  //               → coût d'opportunité d'un redéploiement hypothétique
+  //  · seuilPil = rendement moyen du LIVRE ACTUEL (ou valeur saisie)
+  //               → sert à classer les positions dans Pilotage, sans dépendre
+  //                 d'une simulation. Changer le panier ne reclasse plus rien.
   var refRend = ref.ve>0 && ref.dte>0 ? (ref.prime/ref.dte*365/ref.ve*100) : 0;
-  L.forEach(function(o){ pilotStatut(o, refRend); });
+  var vTot=0, jTot=0;
+  L.forEach(function(o){ if(!o.isLong && o.ve>0){ vTot+=o.ve; jTot+=o.jour; } });
+  var seuilAuto = vTot>0 ? (jTot*365/vTot*100) : 0;
+  var se = document.getElementById('pil-seuil');
+  var saisi = se ? parseFloat(se.value) : NaN;
+  var seuilPil = (!isNaN(saisi) && saisi>0) ? saisi : seuilAuto;
+  if(se) se.placeholder = seuilAuto.toFixed(0)+' auto';
+  L.forEach(function(o){ pilotStatut(o, seuilPil); });
   var lu = document.getElementById('lupd'), lu2=document.getElementById('pil-upd');
   if(lu&&lu2){ lu2.textContent=lu.textContent; lu2.style.color=lu.style.color; }
 
@@ -4604,7 +4719,42 @@ function renderPilotage(){
 
   // ── 4. POSITIONS ─────────────────────────────────────────
   var rr=document.getElementById('pil-ref-rend');
-  if(rr) rr.innerHTML=' &mdash; un contrat neuf rend <strong style="color:var(--text)">'+refRend.toFixed(0)+'%/an</strong> sur marge : tout résiduel sous ce seuil coûte en occasion';
+  if(rr) rr.innerHTML='livre actuel <strong style="color:var(--text)">'+seuilAuto.toFixed(0)+'%/an</strong>'
+    +' &nbsp;·&nbsp; panier simulé <strong style="color:var(--qqq)">'+refRend.toFixed(0)+'%/an</strong>'
+    +(Math.abs(seuilPil-seuilAuto)>0.5?' &nbsp;·&nbsp; <span style="color:var(--amber)">seuil manuel '+seuilPil.toFixed(0)+'%</span>':'');
+
+  // Scénario : impact du panier simulé sur le livre existant
+  var sc=document.getElementById('scn-seuil');
+  if(sc){
+    var sous=L.filter(function(o){ return !o.isLong && o.ve>0 && o.rend<refRend; })
+              .sort(function(x,y){ return x.rend-y.rend; });
+    var veLib=sous.reduce(function(t,o){ return t+o.ve; },0);
+    sc.innerHTML=
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:7px;margin-bottom:8px">'
+      +'<div class="pil-kpi"><div class="pil-kpi-l">Rendement du panier</div>'
+        +'<div class="pil-kpi-v" style="color:var(--qqq)">'+refRend.toFixed(0)+'%/an</div>'
+        +'<div class="pil-kpi-s">sur marge bloquée · jambe '+ref.dte+'j</div></div>'
+      +'<div class="pil-kpi"><div class="pil-kpi-l">Positions sous ce seuil</div>'
+        +'<div class="pil-kpi-v" style="color:'+(sous.length?'var(--amber)':'var(--green)')+'">'+sous.length+'</div>'
+        +'<div class="pil-kpi-s">rendent moins qu\'un contrat neuf</div></div>'
+      +'<div class="pil-kpi"><div class="pil-kpi-l">Marge récupérable</div>'
+        +'<div class="pil-kpi-v" style="color:var(--green)">$'+fi(Math.round(veLib))+'</div>'
+        +'<div class="pil-kpi-s">= '+(PN.ve>0?(veLib/PN.ve).toFixed(1):'—')+' panier(s) de plus</div></div>'
+      +'</div>'
+      +(sous.length
+        ? '<div class="pil-wrap" style="margin-bottom:0"><table class="pil-tbl"><thead><tr><th>Position</th>'
+          +'<th class="pil-num">Rend. actuel</th><th class="pil-num">Écart</th><th class="pil-num">Marge libérée</th>'
+          +'<th class="pil-num">DTE</th></tr></thead><tbody>'
+          +sous.map(function(o){
+            return '<tr><td>'+o.tk+' '+o.K+(o.isCall?'C':'P')+' <span style="color:var(--muted)">'+o.expiration+'</span></td>'
+              +'<td class="pil-num" style="color:var(--amber)">'+o.rend.toFixed(0)+'%/an</td>'
+              +'<td class="pil-num" style="color:var(--red)">−'+(refRend-o.rend).toFixed(0)+' pts</td>'
+              +'<td class="pil-num">$'+fi(Math.round(o.ve))+'</td>'
+              +'<td class="pil-num" style="color:var(--muted)">'+o.dte+'j</td></tr>';
+          }).join('')+'</tbody></table></div>'
+        : '<div class="pil-note" style="margin-bottom:0">Aucune position ne rend moins que ce panier — '
+          +'rien à racheter pour financer ce déploiement.</div>');
+  }
   var BD={ROULER:'pil-b-dn',RACHETER:'pil-b-bl',SURVEILLER:'pil-b-wn',OK:'pil-b-ok',LONG:'pil-b-ok'};
   var sorted=L.slice().sort(function(x,y){ return (x.rank-y.rank)||(x.rend-y.rend); });
   document.getElementById('pil-pos').innerHTML =
