@@ -335,6 +335,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
   <div class="pil-wrap"><table class="pil-tbl" id="pil-pos"></table></div>
 
+
+  <div class="sec">4b &mdash; Positions sous le seuil <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400">&middot; au rendement réel de ton livre, sans simulation</span></div>
+  <div id="pil-impact" style="margin-bottom:1.25rem"></div>
   <!-- ══ 5. STRESS ══ -->
   <div class="sec">5 &mdash; Stress test &middot; après le choc, puis-je encore rouler&nbsp;?</div>
   <div id="pil-stress" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px;margin-bottom:10px"></div>
@@ -4806,38 +4809,19 @@ function renderPilotage(){
     +' &nbsp;·&nbsp; panier simulé <strong style="color:var(--qqq)">'+refRend.toFixed(0)+'%/an</strong>'
     +(Math.abs(seuilPil-seuilAuto)>0.5?' &nbsp;·&nbsp; <span style="color:var(--amber)">seuil manuel '+seuilPil.toFixed(0)+'%</span>':'');
 
-  // Scénario : impact du panier simulé sur le livre existant
-  var sc=document.getElementById('scn-seuil');
-  if(sc){
-    var sous=L.filter(function(o){ return !o.isLong && o.ve>0 && o.rend<refRend; })
-              .sort(function(x,y){ return x.rend-y.rend; });
-    var veLib=sous.reduce(function(t,o){ return t+o.ve; },0);
-    sc.innerHTML=
-      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:7px;margin-bottom:8px">'
-      +'<div class="pil-kpi"><div class="pil-kpi-l">Rendement du panier</div>'
-        +'<div class="pil-kpi-v" style="color:var(--qqq)">'+refRend.toFixed(0)+'%/an</div>'
-        +'<div class="pil-kpi-s">sur marge bloquée · jambe '+ref.dte+'j</div></div>'
-      +'<div class="pil-kpi"><div class="pil-kpi-l">Positions sous ce seuil</div>'
-        +'<div class="pil-kpi-v" style="color:'+(sous.length?'var(--amber)':'var(--green)')+'">'+sous.length+'</div>'
-        +'<div class="pil-kpi-s">rendent moins qu\'un contrat neuf</div></div>'
-      +'<div class="pil-kpi"><div class="pil-kpi-l">Marge récupérable</div>'
-        +'<div class="pil-kpi-v" style="color:var(--green)">$'+fi(Math.round(veLib))+'</div>'
-        +'<div class="pil-kpi-s">= '+(PN.ve>0?(veLib/PN.ve).toFixed(1):'—')+' panier(s) de plus</div></div>'
-      +'</div>'
-      +(sous.length
-        ? '<div class="pil-wrap" style="margin-bottom:0"><table class="pil-tbl"><thead><tr><th>Position</th>'
-          +'<th class="pil-num">Rend. actuel</th><th class="pil-num">Écart</th><th class="pil-num">Marge libérée</th>'
-          +'<th class="pil-num">DTE</th></tr></thead><tbody>'
-          +sous.map(function(o){
-            return '<tr><td>'+o.tk+' '+o.K+(o.isCall?'C':'P')+' <span style="color:var(--muted)">'+o.expiration+'</span></td>'
-              +'<td class="pil-num" style="color:var(--amber)">'+o.rend.toFixed(0)+'%/an</td>'
-              +'<td class="pil-num" style="color:var(--red)">−'+(refRend-o.rend).toFixed(0)+' pts</td>'
-              +'<td class="pil-num">$'+fi(Math.round(o.ve))+'</td>'
-              +'<td class="pil-num" style="color:var(--muted)">'+o.dte+'j</td></tr>';
-          }).join('')+'</tbody></table></div>'
-        : '<div class="pil-note" style="margin-bottom:0">Aucune position ne rend moins que ce panier — '
-          +'rien à racheter pour financer ce déploiement.</div>');
-  }
+  // Le même bloc est rendu deux fois, avec deux seuils distincts :
+  //  · Scénario  → seuil du panier simulé (coût d'opportunité hypothétique)
+  //  · Pilotage  → seuil du livre actuel   (réalité, sans simulation)
+  pilotImpact('scn-seuil', L, refRend, {
+    label:'Rendement du panier', sous:'sur marge bloquée · jambe '+ref.dte+'j',
+    col:'var(--qqq)', comp:'qu\'un contrat neuf',
+    div:PN.ve, divLabel:'panier(s) de plus'});
+  pilotImpact('pil-impact', L, seuilPil, {
+    label:(Math.abs(seuilPil-seuilAuto)>0.5?'Seuil manuel':'Rendement moyen du livre'),
+    sous:'moyenne pondérée sur marge bloquée', col:'var(--green)',
+    comp:'que la moyenne du livre',
+    div:m.margeReq, divLabel:'de la marge bloquée', pct:true});
+
   var BD={ROULER:'pil-b-dn',RACHETER:'pil-b-bl',SURVEILLER:'pil-b-wn',OK:'pil-b-ok',LONG:'pil-b-ok'};
   var sorted=L.slice().sort(function(x,y){ return (x.rank-y.rank)||(x.rend-y.rend); });
   document.getElementById('pil-pos').innerHTML =
@@ -4911,6 +4895,42 @@ function renderPilotage(){
     +'Choc appliqué aux actions (QQQ, SPY, NVDA, XEG, IBIT) ; l\'or est laissé inchangé. '
     +'Coussin T-bills = 30 % de la valeur CBIL + UBIL, soit le gain de VE si tu les convertis en cash (70 % → 100 %). '
     +'Le plafond de marge est un seuil de sécurité, pas un budget à remplir.';
+}
+
+// Bloc « positions sous le seuil » — rendu générique.
+// seuil : rendement de référence en %/an sur marge bloquée.
+function pilotImpact(elId, L, seuil, o){
+  var el=document.getElementById(elId); if(!el) return;
+  var sous=L.filter(function(x){ return !x.isLong && x.ve>0 && x.rend<seuil; })
+            .sort(function(x,y){ return x.rend-y.rend; });
+  var veLib=sous.reduce(function(t,x){ return t+x.ve; },0);
+  var recup = o.pct
+    ? (o.div>0 ? (veLib/o.div*100).toFixed(0)+'% '+o.divLabel : '—')
+    : (o.div>0 ? (veLib/o.div).toFixed(1)+' '+o.divLabel : '—');
+  el.innerHTML =
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:7px;margin-bottom:8px">'
+    +'<div class="pil-kpi"><div class="pil-kpi-l">'+o.label+'</div>'
+      +'<div class="pil-kpi-v" style="color:'+o.col+'">'+seuil.toFixed(0)+'%/an</div>'
+      +'<div class="pil-kpi-s">'+o.sous+'</div></div>'
+    +'<div class="pil-kpi"><div class="pil-kpi-l">Positions sous ce seuil</div>'
+      +'<div class="pil-kpi-v" style="color:'+(sous.length?'var(--amber)':'var(--green)')+'">'+sous.length+'</div>'
+      +'<div class="pil-kpi-s">rendent moins '+o.comp+'</div></div>'
+    +'<div class="pil-kpi"><div class="pil-kpi-l">Marge récupérable</div>'
+      +'<div class="pil-kpi-v" style="color:var(--green)">$'+fi(Math.round(veLib))+'</div>'
+      +'<div class="pil-kpi-s">= '+recup+'</div></div>'
+    +'</div>'
+    +(sous.length
+      ? '<div class="pil-wrap" style="margin-bottom:0"><table class="pil-tbl"><thead><tr><th>Position</th>'
+        +'<th class="pil-num">Rend. actuel</th><th class="pil-num">Écart</th>'
+        +'<th class="pil-num">Marge libérée</th><th class="pil-num">DTE</th></tr></thead><tbody>'
+        +sous.map(function(x){
+          return '<tr><td>'+x.tk+' '+x.K+(x.isCall?'C':'P')+' <span style="color:var(--muted)">'+x.expiration+'</span></td>'
+            +'<td class="pil-num" style="color:var(--amber)">'+x.rend.toFixed(0)+'%/an</td>'
+            +'<td class="pil-num" style="color:var(--red)">−'+(seuil-x.rend).toFixed(0)+' pts</td>'
+            +'<td class="pil-num">$'+fi(Math.round(x.ve))+'</td>'
+            +'<td class="pil-num" style="color:var(--muted)">'+x.dte+'j</td></tr>';
+        }).join('')+'</tbody></table></div>'
+      : '<div class="pil-note" style="margin-bottom:0">Aucune position ne rend moins que ce seuil.</div>');
 }
 
 // Repricing complet du livre sous choc de prix + choc d'IV
