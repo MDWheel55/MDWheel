@@ -320,8 +320,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 
   <!-- ══ ÉTAT DU LIVRE ══ -->
   <div class="sec">État du livre &middot; limites, exposition et delta-équivalent</div>
-  <div id="pil-gauges" style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:1.25rem"></div>
+  <div class="pil-wrap" style="margin-bottom:10px"><table class="pil-tbl" id="pil-gauges"></table></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:1.5rem" id="pil-expo-kpi"></div>
+
+  <!-- ══ REVENU PAR TRANCHE DE TENOR ══ -->
+  <div class="sec">Revenu par tranche de tenor <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400">&middot; cap sur l'objectif mensuel</span></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-rev-kpi"></div>
+  <div class="pil-wrap" style="margin-bottom:6px"><table class="pil-tbl" id="pil-tenor"></table></div>
+  <div class="pil-note" id="pil-tenor-note" style="margin-bottom:1.5rem"></div>
 
   <!-- ══ POSITIONS ══ -->
   <div class="sec">Positions &middot; triées par urgence puis rendement sur marge</div>
@@ -4723,43 +4729,39 @@ function renderPilotage(){
           +'<td class="pil-num" style="color:'+(isB?'var(--amber)':'var(--muted)')+'">'+(c.x>90?'—':c.x.toFixed(1))+'</td></tr>';
       }).join('')+'</tbody>';
 
-  // Jauges — valeur $ affichée en plus du % (demande utilisateur).
-  // Les 3 premières = plafonds de risque ; ≤90j garde son plafond ;
-  // ≤180j est informatif (distribution des échéances, sans plafond).
+  // Tableau des limites — Actuel $ / Plafond $ / % · % plafond + barre.
+  // Un seul endroit pour marge & delta (fini le doublon avec les cartes).
+  // Les 4 premières = plafonds de risque ; ≤180j est informatif (distribution).
   var gj=[
-    {l:'Marge utilisée',      cur:m.margeReq,          v:brute>0?m.margeReq/brute*100:0,           cap:s.mx,     suf:'%'},
-    {l:'Delta-équiv / avoir', cur:Math.abs(a.deltaEq), v:avoir>0?Math.abs(a.deltaEq)/avoir*100:0,  cap:s.dx*100, suf:'%'},
-    {l:'Notionnel / brute',   cur:notTot,              v:brute>0?notTot/brute*100:0,               cap:s.nx*100, suf:'%'},
-    {l:'Notionnel ≤ 90j',     cur:a.not90,             v:notTot>0?a.not90/notTot*100:0,            cap:s.t90,    suf:'%'},
-    {l:'Notionnel ≤ 180j',    cur:a.not180,            v:notTot>0?a.not180/notTot*100:0,           cap:0,        suf:'%', info:true}
+    {l:'Marge utilisée',   cur:m.margeReq,          lim:brute*s.mx/100,   v:brute>0?m.margeReq/brute*100:0,          cap:s.mx},
+    {l:'Delta-équiv',      cur:Math.abs(a.deltaEq), lim:s.dx*avoir,       v:avoir>0?Math.abs(a.deltaEq)/avoir*100:0, cap:s.dx*100},
+    {l:'Notionnel brut',   cur:notTot,              lim:s.nx*brute,       v:brute>0?notTot/brute*100:0,              cap:s.nx*100},
+    {l:'Notionnel ≤ 90j',  cur:a.not90,             lim:s.t90/100*notTot, v:notTot>0?a.not90/notTot*100:0,           cap:s.t90},
+    {l:'Notionnel ≤ 180j', cur:a.not180,            lim:null,             v:notTot>0?a.not180/notTot*100:0,          cap:0, info:true}
   ];
-  document.getElementById('pil-gauges').innerHTML = gj.map(function(x){
-    var ratio=x.cap>0?x.v/x.cap:0;
-    var c = x.info ? 'var(--qqq)' : (ratio>=1?'var(--red)':ratio>=0.8?'var(--amber)':'var(--green)');
-    var scale = x.info ? 100 : Math.max(x.cap*1.35,1);   // jauge info = échelle 0–100 %
-    var w  = Math.min(100, x.v/scale*100);
-    var cp = x.info ? -1 : Math.min(100, x.cap/scale*100);
-    var money = '$'+fi(Math.round(x.cur))+' · ';
-    var valTxt = x.info ? (money+x.v.toFixed(0)+x.suf+' not.')
-                        : (money+x.v.toFixed(0)+x.suf+' / '+x.cap.toFixed(0)+x.suf);
-    return '<div class="pil-gauge"><span class="pil-gauge-l">'+x.l+'</span>'
-      +'<span class="pil-gauge-bg"><span class="pil-gauge-f" style="width:'+w+'%;background:'+c+'"></span>'
-      +(cp>=0?'<span class="pil-gauge-cap" style="left:'+cp+'%"></span>':'')+'</span>'
-      +'<span class="pil-gauge-v" style="color:'+c+'">'+valTxt+'</span></div>';
-  }).join('');
+  document.getElementById('pil-gauges').innerHTML =
+    '<thead><tr><th>Limite</th><th class="pil-num">Actuel</th><th class="pil-num">Plafond</th>'
+    +'<th class="pil-num">Utilisation</th><th style="width:24%"></th></tr></thead><tbody>'
+    + gj.map(function(x){
+        var ratio=x.cap>0?x.v/x.cap:0;
+        var c = x.info ? 'var(--qqq)' : (ratio>=1?'var(--red)':ratio>=0.8?'var(--amber)':'var(--green)');
+        var scale = x.info ? 100 : Math.max(x.cap*1.35,1);   // info = échelle 0–100 %
+        var w  = Math.min(100, x.v/scale*100);
+        var cp = x.info ? -1 : Math.min(100, x.cap/scale*100);
+        var pct = x.info ? (x.v.toFixed(0)+'% not.') : (x.v.toFixed(0)+'% / '+x.cap.toFixed(0)+'%');
+        return '<tr><td style="color:var(--text)">'+x.l+'</td>'
+          +'<td class="pil-num">$'+fi(Math.round(x.cur))+'</td>'
+          +'<td class="pil-num" style="color:var(--muted);font-weight:400">'+(x.lim!=null?'$'+fi(Math.round(x.lim)):'—')+'</td>'
+          +'<td class="pil-num" style="color:'+c+'">'+pct+'</td>'
+          +'<td><span class="pil-gauge-bg" style="display:block;width:100%"><span class="pil-gauge-f" style="width:'+w+'%;background:'+c+'"></span>'
+            +(cp>=0?'<span class="pil-gauge-cap" style="left:'+cp+'%"></span>':'')+'</span></td>'
+          +'</tr>';
+      }).join('')+'</tbody>';
 
   // ── 2. EXPOSITION ────────────────────────────────────────
   var st = pilotStress(L, m, -15, 15);
   var conv = Math.abs(a.deltaEq)>0 ? Math.abs(st.deltaAp)/Math.abs(a.deltaEq) : 0;
-  var margeDispo = brute*s.mx/100 - m.margeReq;
-  var margePct   = brute>0 ? m.margeReq/brute*100 : 0;
   var kp=[
-    {l:'Marge bloquée', v:'$'+fi(Math.round(m.margeReq)),
-     s:margePct.toFixed(0)+'% de $'+fi(Math.round(brute))+' brute · dispo $'+fi(Math.round(Math.max(0,margeDispo))),
-     c:margePct>=s.mx?'var(--red)':margePct>=s.mx*0.8?'var(--amber)':'var(--green)'},
-    {l:'Delta-équiv (repos)', v:'$'+fi(Math.round(Math.abs(a.deltaEq))),
-     s:(avoir>0?(Math.abs(a.deltaEq)/avoir).toFixed(2):'—')+'× l\'avoir',
-     c:(avoir>0&&Math.abs(a.deltaEq)/avoir>s.dx)?'var(--red)':'var(--green)'},
     {l:'Delta-équiv (stressé)', v:'$'+fi(Math.round(Math.abs(st.deltaAp))),
      s:(avoir>0?(Math.abs(st.deltaAp)/avoir).toFixed(2):'—')+'× l\'avoir · −15 % / IV +15',
      c:'var(--amber)'},
@@ -4778,6 +4780,80 @@ function renderPilotage(){
       +'<div class="pil-kpi-v" style="color:'+i.c+'">'+i.v+'</div>'
       +'<div class="pil-kpi-s">'+i.s+'</div></div>';
   }).join('');
+
+  // ── Revenu par tranche de tenor ──────────────────────────
+  // Chaque position tombe dans un bucket de DTE. Le thêta de chaque bucket
+  // s'additionne au thêta du livre (+X$/j). Le revenu /mois = prime linéaire
+  // (prime ÷ durée) × 30,44 j — la même base que le rendement %/an du livre.
+  var OBJ = 10000;      // objectif mensuel (USD)
+  var JPM = 30.44;      // jours/mois moyen
+  var TB=[
+    {l:'≤ 90j',      lo:0,   hi:90},
+    {l:'90 – 180j',  lo:90,  hi:180},
+    {l:'180 – 365j', lo:180, hi:365},
+    {l:'365j +',     lo:365, hi:1e9}
+  ];
+  TB.forEach(function(b){ b.n=0; b.notion=0; b.ve=0; b.theta=0; b.jour=0; });
+  var TT={n:0,notion:0,ve:0,theta:0,jour:0};
+  L.forEach(function(o){
+    var b=null;
+    for(var i=0;i<TB.length;i++){ if(o.dte>TB[i].lo && o.dte<=TB[i].hi){ b=TB[i]; break; } }
+    if(!b) b = (o.dte<=0) ? TB[0] : TB[TB.length-1];
+    b.n++; b.notion+=o.notion; b.ve+=o.ve; b.theta+=o.theta; b.jour+=o.jour;
+    TT.n++; TT.notion+=o.notion; TT.ve+=o.ve; TT.theta+=o.theta; TT.jour+=o.jour;
+  });
+  var revMois = TT.jour*JPM;
+  var ecart   = OBJ - revMois;
+  var pctObj  = OBJ>0 ? revMois/OBJ*100 : 0;
+  var money$  = function(n){ return (n>=0?'+$':'−$')+fi(Math.abs(Math.round(n))); };
+
+  document.getElementById('pil-rev-kpi').innerHTML = [
+    {l:'Revenu estimé /mois', v:'$'+fi(Math.round(revMois)),
+     s:'prime linéaire · '+(TT.ve>0?(TT.jour*365/TT.ve*100).toFixed(0):'0')+'%/an sur marge', c:'var(--green)'},
+    {l:'Objectif mensuel', v:'$'+fi(OBJ), s:'cible de revenu', c:'var(--muted)'},
+    {l:(ecart>0?'Écart à combler':'Objectif atteint'),
+     v:(ecart>0?'$'+fi(Math.round(ecart)):'✓ +$'+fi(Math.round(-ecart))),
+     s:pctObj.toFixed(0)+'% de l\'objectif', c:ecart>0?'var(--red)':'var(--green)'},
+    {l:'Thêta du livre', v:money$(a.theta)+' /j',
+     s:'~'+money$(a.theta*JPM)+' /mois de décroissance', c:a.theta>=0?'var(--green)':'var(--red)'}
+  ].map(function(i){ return '<div class="pil-kpi"><div class="pil-kpi-l">'+i.l+'</div>'
+      +'<div class="pil-kpi-v" style="color:'+i.c+'">'+i.v+'</div>'
+      +'<div class="pil-kpi-s">'+i.s+'</div></div>'; }).join('');
+
+  var maxRev=1; TB.forEach(function(b){ if(b.jour*JPM>maxRev) maxRev=b.jour*JPM; });
+  document.getElementById('pil-tenor').innerHTML =
+    '<thead><tr><th>Tranche</th><th class="pil-num">Pos.</th><th class="pil-num">Notionnel</th>'
+    +'<th class="pil-num">Marge (VE)</th><th class="pil-num">Thêta $/j</th>'
+    +'<th class="pil-num">Revenu $/mois</th><th class="pil-num">Rend. %/an</th><th style="width:16%"></th></tr></thead><tbody>'
+    + TB.map(function(b){
+        var rev=b.jour*JPM, rend=b.ve>0?b.jour*365/b.ve*100:0;
+        var w=Math.min(100, rev/maxRev*100);
+        return '<tr><td style="color:var(--text)">'+b.l+'</td>'
+          +'<td class="pil-num" style="color:var(--muted);font-weight:400">'+b.n+'</td>'
+          +'<td class="pil-num">$'+fi(Math.round(b.notion))+'</td>'
+          +'<td class="pil-num" style="color:var(--muted);font-weight:400">$'+fi(Math.round(b.ve))+'</td>'
+          +'<td class="pil-num" style="color:'+(b.theta>=0?'var(--green)':'var(--red)')+'">'+money$(b.theta)+'</td>'
+          +'<td class="pil-num" style="color:'+(rev>0?'var(--green)':'var(--muted)')+'">$'+fi(Math.round(rev))+'</td>'
+          +'<td class="pil-num" style="color:'+(rend>=15?'var(--green)':rend>0?'var(--amber)':'var(--muted)')+'">'+rend.toFixed(0)+'%</td>'
+          +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+w.toFixed(0)+'%;background:var(--green)"></div></div></td></tr>';
+      }).join('')
+    + '<tr style="border-top:2px solid var(--border);background:var(--s2)"><td style="font-weight:700;color:var(--text)">Total</td>'
+      +'<td class="pil-num">'+TT.n+'</td><td class="pil-num">$'+fi(Math.round(TT.notion))+'</td>'
+      +'<td class="pil-num">$'+fi(Math.round(TT.ve))+'</td>'
+      +'<td class="pil-num" style="color:'+(TT.theta>=0?'var(--green)':'var(--red)')+'">'+money$(TT.theta)+'</td>'
+      +'<td class="pil-num" style="color:var(--green)">$'+fi(Math.round(revMois))+'</td>'
+      +'<td class="pil-num">'+(TT.ve>0?(TT.jour*365/TT.ve*100).toFixed(0):'0')+'%</td><td></td></tr>'
+    +'</tbody>';
+
+  var noteEl=document.getElementById('pil-tenor-note');
+  if(noteEl){
+    var sweet = TB[0].jour*JPM + TB[1].jour*JPM;   // revenu ≤180j
+    noteEl.innerHTML = 'Le revenu se récolte surtout dans les tranches courtes (le thêta y est le plus efficace). '
+      +'Actuellement <strong style="color:var(--text)">$'+fi(Math.round(sweet))+'/mois</strong> provient du ≤180j '
+      +'sur un besoin de <strong style="color:var(--text)">$'+fi(OBJ)+'</strong> — '
+      +(ecart>0?'écart de <strong style="color:var(--red)">$'+fi(Math.round(ecart))+'/mois</strong> à combler en raccourcissant le tenor moyen, en ajoutant du capital, ou en visant des primes plus élevées.'
+              :'objectif atteint.');
+  }
 
   var fk=Object.keys(a.parFacteur).sort(function(x,y){
     return Math.abs(a.parFacteur[y].delta)-Math.abs(a.parFacteur[x].delta); });
@@ -4822,8 +4898,8 @@ function renderPilotage(){
 
   // ── 4. POSITIONS ─────────────────────────────────────────
   var rr=document.getElementById('pil-ref-rend');
-  if(rr) rr.innerHTML='livre actuel <strong style="color:var(--text)">'+seuilAuto.toFixed(0)+'%/an</strong>'
-    +' &nbsp;·&nbsp; panier simulé <strong style="color:var(--qqq)">'+refRend.toFixed(0)+'%/an</strong>'
+  // Pilotage = réalité actuelle : aucune référence au panier simulé (onglet Scénario).
+  if(rr) rr.innerHTML='rendement moyen du livre <strong style="color:var(--text)">'+seuilAuto.toFixed(0)+'%/an</strong>'
     +(Math.abs(seuilPil-seuilAuto)>0.5?' &nbsp;·&nbsp; <span style="color:var(--amber)">seuil manuel '+seuilPil.toFixed(0)+'%</span>':'');
 
   // Le même bloc est rendu deux fois, avec deux seuils distincts :
