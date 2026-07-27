@@ -4729,30 +4729,27 @@ function renderPilotage(){
           +'<td class="pil-num" style="color:'+(isB?'var(--amber)':'var(--muted)')+'">'+(c.x>90?'—':c.x.toFixed(1))+'</td></tr>';
       }).join('')+'</tbody>';
 
-  // Tableau des limites — Actuel $ / Plafond $ / % · % plafond + barre.
-  // Un seul endroit pour marge & delta (fini le doublon avec les cartes).
-  // La distribution par tenor (≤90j / ≤180j …) vit dans le tableau « Revenu par tranche ».
+  // Tableau des limites — Utilisé $ / Total $ dont le ratio DONNE le pourcentage.
+  // base = dénominateur du % (marge brute pour marge/notionnel, avoir pour delta).
+  // La colonne « / plafond » rappelle la limite. La distribution par tenor
+  // (≤90j / ≤180j …) vit dans le tableau « Revenu par tranche ».
   var gj=[
-    {l:'Marge utilisée',   cur:m.margeReq,          lim:brute*s.mx/100,   v:brute>0?m.margeReq/brute*100:0,          cap:s.mx},
-    {l:'Delta-équiv',      cur:Math.abs(a.deltaEq), lim:s.dx*avoir,       v:avoir>0?Math.abs(a.deltaEq)/avoir*100:0, cap:s.dx*100},
-    {l:'Notionnel brut',   cur:notTot,              lim:s.nx*brute,       v:brute>0?notTot/brute*100:0,              cap:s.nx*100}
+    {l:'Marge utilisée', cur:m.margeReq,          base:brute, bl:'brute', v:brute>0?m.margeReq/brute*100:0,          cap:s.mx},
+    {l:'Delta-équiv',    cur:Math.abs(a.deltaEq), base:avoir, bl:'avoir', v:avoir>0?Math.abs(a.deltaEq)/avoir*100:0, cap:s.dx*100},
+    {l:'Notionnel brut', cur:notTot,              base:brute, bl:'brute', v:brute>0?notTot/brute*100:0,              cap:s.nx*100}
   ];
   document.getElementById('pil-gauges').innerHTML =
-    '<thead><tr><th>Limite</th><th class="pil-num">Actuel</th><th class="pil-num">Plafond</th>'
-    +'<th class="pil-num">Utilisation</th><th style="width:24%"></th></tr></thead><tbody>'
+    '<thead><tr><th>Limite</th><th class="pil-num">Utilisé</th><th class="pil-num">Total</th>'
+    +'<th class="pil-num">= %</th><th class="pil-num">Plafond</th></tr></thead><tbody>'
     + gj.map(function(x){
         var ratio=x.cap>0?x.v/x.cap:0;
-        var c = x.info ? 'var(--qqq)' : (ratio>=1?'var(--red)':ratio>=0.8?'var(--amber)':'var(--green)');
-        var scale = x.info ? 100 : Math.max(x.cap*1.35,1);   // info = échelle 0–100 %
-        var w  = Math.min(100, x.v/scale*100);
-        var cp = x.info ? -1 : Math.min(100, x.cap/scale*100);
-        var pct = x.info ? (x.v.toFixed(0)+'% not.') : (x.v.toFixed(0)+'% / '+x.cap.toFixed(0)+'%');
+        var c = ratio>=1?'var(--red)':ratio>=0.8?'var(--amber)':'var(--green)';
         return '<tr><td style="color:var(--text)">'+x.l+'</td>'
           +'<td class="pil-num">$'+fi(Math.round(x.cur))+'</td>'
-          +'<td class="pil-num" style="color:var(--muted);font-weight:400">'+(x.lim!=null?'$'+fi(Math.round(x.lim)):'—')+'</td>'
-          +'<td class="pil-num" style="color:'+c+'">'+pct+'</td>'
-          +'<td><span class="pil-gauge-bg" style="display:block;width:100%"><span class="pil-gauge-f" style="width:'+w+'%;background:'+c+'"></span>'
-            +(cp>=0?'<span class="pil-gauge-cap" style="left:'+cp+'%"></span>':'')+'</span></td>'
+          +'<td class="pil-num" style="color:var(--muted);font-weight:400">$'+fi(Math.round(x.base))
+            +' <span style="font-size:9px;color:var(--dim)">'+x.bl+'</span></td>'
+          +'<td class="pil-num" style="color:'+c+'">'+x.v.toFixed(0)+'%</td>'
+          +'<td class="pil-num" style="color:var(--muted);font-weight:400">'+x.cap.toFixed(0)+'%</td>'
           +'</tr>';
       }).join('')+'</tbody>';
 
