@@ -4731,13 +4731,11 @@ function renderPilotage(){
 
   // Tableau des limites — Actuel $ / Plafond $ / % · % plafond + barre.
   // Un seul endroit pour marge & delta (fini le doublon avec les cartes).
-  // Les 4 premières = plafonds de risque ; ≤180j est informatif (distribution).
+  // La distribution par tenor (≤90j / ≤180j …) vit dans le tableau « Revenu par tranche ».
   var gj=[
     {l:'Marge utilisée',   cur:m.margeReq,          lim:brute*s.mx/100,   v:brute>0?m.margeReq/brute*100:0,          cap:s.mx},
     {l:'Delta-équiv',      cur:Math.abs(a.deltaEq), lim:s.dx*avoir,       v:avoir>0?Math.abs(a.deltaEq)/avoir*100:0, cap:s.dx*100},
-    {l:'Notionnel brut',   cur:notTot,              lim:s.nx*brute,       v:brute>0?notTot/brute*100:0,              cap:s.nx*100},
-    {l:'Notionnel ≤ 90j',  cur:a.not90,             lim:s.t90/100*notTot, v:notTot>0?a.not90/notTot*100:0,           cap:s.t90},
-    {l:'Notionnel ≤ 180j', cur:a.not180,            lim:null,             v:notTot>0?a.not180/notTot*100:0,          cap:0, info:true}
+    {l:'Notionnel brut',   cur:notTot,              lim:s.nx*brute,       v:brute>0?notTot/brute*100:0,              cap:s.nx*100}
   ];
   document.getElementById('pil-gauges').innerHTML =
     '<thead><tr><th>Limite</th><th class="pil-num">Actuel</th><th class="pil-num">Plafond</th>'
@@ -4793,23 +4791,27 @@ function renderPilotage(){
     {l:'180 – 365j', lo:180, hi:365},
     {l:'365j +',     lo:365, hi:1e9}
   ];
-  TB.forEach(function(b){ b.n=0; b.notion=0; b.ve=0; b.theta=0; b.jour=0; });
-  var TT={n:0,notion:0,ve:0,theta:0,jour:0};
+  TB.forEach(function(b){ b.n=0; b.notion=0; b.ve=0; b.theta=0; b.jourM=0; });
+  var TT={n:0,notion:0,ve:0,theta:0,jourM:0};
   L.forEach(function(o){
     var b=null;
     for(var i=0;i<TB.length;i++){ if(o.dte>TB[i].lo && o.dte<=TB[i].hi){ b=TB[i]; break; } }
     if(!b) b = (o.dte<=0) ? TB[0] : TB[TB.length-1];
-    b.n++; b.notion+=o.notion; b.ve+=o.ve; b.theta+=o.theta; b.jour+=o.jour;
-    TT.n++; TT.notion+=o.notion; TT.ve+=o.ve; TT.theta+=o.theta; TT.jour+=o.jour;
+    // Revenu = prime SUR MARGE : on ne crédite que les positions qui immobilisent
+    // de la marge (ve>0). Un call vendu en roulement encaisse de la prime mais
+    // n'a aucune VE → exclu, pour que le total colle au « rendement moyen du livre ».
+    var jM = (o.ve>0) ? o.jour : 0;
+    b.n++; b.notion+=o.notion; b.ve+=o.ve; b.theta+=o.theta; b.jourM+=jM;
+    TT.n++; TT.notion+=o.notion; TT.ve+=o.ve; TT.theta+=o.theta; TT.jourM+=jM;
   });
-  var revMois = TT.jour*JPM;
+  var revMois = TT.jourM*JPM;
   var ecart   = OBJ - revMois;
   var pctObj  = OBJ>0 ? revMois/OBJ*100 : 0;
   var money$  = function(n){ return (n>=0?'+$':'−$')+fi(Math.abs(Math.round(n))); };
 
   document.getElementById('pil-rev-kpi').innerHTML = [
     {l:'Revenu estimé /mois', v:'$'+fi(Math.round(revMois)),
-     s:'prime linéaire · '+(TT.ve>0?(TT.jour*365/TT.ve*100).toFixed(0):'0')+'%/an sur marge', c:'var(--green)'},
+     s:'prime linéaire · '+(TT.ve>0?(TT.jourM*365/TT.ve*100).toFixed(0):'0')+'%/an sur marge', c:'var(--green)'},
     {l:'Objectif mensuel', v:'$'+fi(OBJ), s:'cible de revenu', c:'var(--muted)'},
     {l:(ecart>0?'Écart à combler':'Objectif atteint'),
      v:(ecart>0?'$'+fi(Math.round(ecart)):'✓ +$'+fi(Math.round(-ecart))),
@@ -4820,13 +4822,13 @@ function renderPilotage(){
       +'<div class="pil-kpi-v" style="color:'+i.c+'">'+i.v+'</div>'
       +'<div class="pil-kpi-s">'+i.s+'</div></div>'; }).join('');
 
-  var maxRev=1; TB.forEach(function(b){ if(b.jour*JPM>maxRev) maxRev=b.jour*JPM; });
+  var maxRev=1; TB.forEach(function(b){ if(b.jourM*JPM>maxRev) maxRev=b.jourM*JPM; });
   document.getElementById('pil-tenor').innerHTML =
     '<thead><tr><th>Tranche</th><th class="pil-num">Pos.</th><th class="pil-num">Notionnel</th>'
     +'<th class="pil-num">Marge (VE)</th><th class="pil-num">Thêta $/j</th>'
     +'<th class="pil-num">Revenu $/mois</th><th class="pil-num">Rend. %/an</th><th style="width:16%"></th></tr></thead><tbody>'
     + TB.map(function(b){
-        var rev=b.jour*JPM, rend=b.ve>0?b.jour*365/b.ve*100:0;
+        var rev=b.jourM*JPM, rend=b.ve>0?b.jourM*365/b.ve*100:0;
         var w=Math.min(100, rev/maxRev*100);
         return '<tr><td style="color:var(--text)">'+b.l+'</td>'
           +'<td class="pil-num" style="color:var(--muted);font-weight:400">'+b.n+'</td>'
@@ -4842,12 +4844,12 @@ function renderPilotage(){
       +'<td class="pil-num">$'+fi(Math.round(TT.ve))+'</td>'
       +'<td class="pil-num" style="color:'+(TT.theta>=0?'var(--green)':'var(--red)')+'">'+money$(TT.theta)+'</td>'
       +'<td class="pil-num" style="color:var(--green)">$'+fi(Math.round(revMois))+'</td>'
-      +'<td class="pil-num">'+(TT.ve>0?(TT.jour*365/TT.ve*100).toFixed(0):'0')+'%</td><td></td></tr>'
+      +'<td class="pil-num">'+(TT.ve>0?(TT.jourM*365/TT.ve*100).toFixed(0):'0')+'%</td><td></td></tr>'
     +'</tbody>';
 
   var noteEl=document.getElementById('pil-tenor-note');
   if(noteEl){
-    var sweet = TB[0].jour*JPM + TB[1].jour*JPM;   // revenu ≤180j
+    var sweet = TB[0].jourM*JPM + TB[1].jourM*JPM;   // revenu ≤180j
     noteEl.innerHTML = 'Le revenu se récolte surtout dans les tranches courtes (le thêta y est le plus efficace). '
       +'Actuellement <strong style="color:var(--text)">$'+fi(Math.round(sweet))+'/mois</strong> provient du ≤180j '
       +'sur un besoin de <strong style="color:var(--text)">$'+fi(OBJ)+'</strong> — '
