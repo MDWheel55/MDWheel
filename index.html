@@ -181,11 +181,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 .pil-num{text-align:right;font-weight:700;}
 .pil-wrap{background:var(--s1);border:1px solid var(--border);border-radius:4px;overflow-x:auto;margin-bottom:1.25rem;}
 .pil-gauge{display:flex;align-items:center;gap:8px;padding:5px 0;}
-.pil-gauge-l{font-family:var(--mono);font-size:9px;color:var(--muted);min-width:132px;}
+.pil-gauge-l{font-family:var(--mono);font-size:9px;color:var(--muted);min-width:118px;}
 .pil-gauge-bg{flex:1;height:5px;background:var(--s3);border-radius:3px;position:relative;overflow:visible;min-width:60px;}
 .pil-gauge-f{height:5px;border-radius:3px;transition:width .4s;}
 .pil-gauge-cap{position:absolute;top:-3px;width:2px;height:11px;background:var(--text);opacity:.55;}
-.pil-gauge-v{font-family:var(--mono);font-size:10px;font-weight:700;min-width:86px;text-align:right;}
+.pil-gauge-v{font-family:var(--mono);font-size:10px;font-weight:700;min-width:150px;text-align:right;white-space:nowrap;}
 .pil-badge{font-family:var(--mono);font-size:8px;font-weight:700;padding:2px 6px;border-radius:2px;letter-spacing:0.04em;white-space:nowrap;}
 .pil-b-ok{background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green);}
 .pil-b-wn{background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber);}
@@ -314,18 +314,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 
 <!-- PILOTAGE (nouveau tableau de bord décisionnel) -->
 <div class="panel" id="tab-dashboard">
-  <!-- ══ 2. EXPOSITION ══ -->
-  <div class="sec">2 &mdash; État du livre &middot; limites, exposition et delta-équivalent</div>
+  <!-- ══ FACTEUR DE RISQUE — en tête ══ -->
+  <div class="sec">Facteur de risque &middot; exposition par sous-jacent</div>
+  <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-facteurs"></table></div>
+
+  <!-- ══ ÉTAT DU LIVRE ══ -->
+  <div class="sec">État du livre &middot; limites, exposition et delta-équivalent</div>
   <div id="pil-gauges" style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 14px;margin-bottom:1.25rem"></div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-expo-kpi"></div>
-  <div class="pil-wrap"><table class="pil-tbl" id="pil-facteurs"></table></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:1.5rem" id="pil-expo-kpi"></div>
 
-  <!-- ══ 3. ÉCHÉANCES ══ -->
-  <div class="sec">3 &mdash; Calendrier des échéances &middot; concentration</div>
-  <div class="pil-wrap"><table class="pil-tbl" id="pil-expi"></table></div>
-
-  <!-- ══ 4. POSITIONS ══ -->
-  <div class="sec">4 &mdash; Positions &middot; triées par urgence puis rendement sur marge</div>
+  <!-- ══ POSITIONS ══ -->
+  <div class="sec">Positions &middot; triées par urgence puis rendement sur marge</div>
   <div class="pil-cfg" style="margin-bottom:8px">
     <label>Seuil de rachat</label>
     <input class="pil-inp" id="pil-seuil" type="number" step="1" placeholder="auto" onchange="renderPilotage()">
@@ -333,13 +332,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <button class="btn btn-d" style="padding:3px 10px" onclick="pilotSeuilAuto()">Auto</button>
     <span id="pil-ref-rend" style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-left:auto"></span>
   </div>
-  <div class="pil-wrap"><table class="pil-tbl" id="pil-pos"></table></div>
+  <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-pos"></table></div>
 
+  <!-- ══ POSITIONS SOUS LE SEUIL ══ -->
+  <div class="sec">Positions sous le seuil <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400">&middot; au rendement réel de ton livre, sans simulation</span></div>
+  <div id="pil-impact" style="margin-bottom:1.5rem"></div>
 
-  <div class="sec">4b &mdash; Positions sous le seuil <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400">&middot; au rendement réel de ton livre, sans simulation</span></div>
-  <div id="pil-impact" style="margin-bottom:1.25rem"></div>
-  <!-- ══ 5. STRESS ══ -->
-  <div class="sec">5 &mdash; Stress test &middot; après le choc, puis-je encore rouler&nbsp;?</div>
+  <!-- ══ CALENDRIER DES ÉCHÉANCES ══ -->
+  <div class="sec">Calendrier des échéances &middot; concentration</div>
+  <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-expi"></table></div>
+
+  <!-- ══ STRESS TEST ══ -->
+  <div class="sec">Stress test &middot; après le choc, puis-je encore rouler&nbsp;?</div>
   <div id="pil-stress" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:8px;margin-bottom:10px"></div>
   <div class="pil-note" id="pil-notes"></div>
 </div>
@@ -3494,7 +3498,9 @@ function renderActionsTable() {
     '<td></td></tr>';
 
   // Stocker le P&L total actions pour les KPIs du compte
-  window._pnlActionsUSD = totalPnlUSD;
+  window._pnlActionsUSD  = totalPnlUSD;      // équiv. USD (compat)
+  window._pnlActionsCADn = totSecCAD.pnl;    // P&L actions CAD, natif CAD
+  window._pnlActionsUSDn = totSecUSD.pnl;    // P&L actions USD, natif USD
   renderPnlActRealized();
 }
 
@@ -4184,6 +4190,11 @@ function recalcCompte() {
   var pnlOpts = pnlOptsUSD + pnlOptsCAD/fx2;  // équivalent USD
 
   var pnlActions = window._pnlActionsUSD || 0;
+  // Cumul CAD+USD des P&L, exprimé en CAD (portion USD convertie au taux du jour).
+  var pnlActCADn   = window._pnlActionsCADn || 0;                 // actions, natif CAD
+  var pnlActUSDn   = window._pnlActionsUSDn || 0;                 // actions, natif USD
+  var pnlActionsCAD = pnlActCADn + pnlActUSDn * fx2;             // cumul actions en CAD
+  var pnlOptsCADtot = pnlOptsCAD + pnlOptsUSD * fx2;            // cumul options en CAD
   // KPI Ligne 1 — Valeur & Performance
   var kpi1 = [
     {l:'Valeur totale compte', v:'$'+fi(totalCAD), s:'~$'+fi(total)+' USD · options '+(valOptsUSD>=0?'+':'')+fi(Math.round(valOptsUSD))+'$ USD'
@@ -4192,10 +4203,11 @@ function recalcCompte() {
     {l:'Actions CAD',          v:'$'+fi((valV+valX+valC)*fx2), s:'VEQT + XEG + CBIL · CAD', c:''},
     {l:'Cash USD',             v:'$'+fi(cashU2), s:'Liquidités USD disponibles', c:cashU2>=40000?'g':'a'},
     {l:'Cash CAD',             v:'$'+fi(cashC2), s:'Liquidités CAD · $'+fi(Math.round(cashC2/fx2))+' USD éq.', c:cashC2>=50000?'g':'a'},
-    {l:'P&L actions',          v:(pnlActions>=0?'+':'')+fi(pnlActions)+'$ USD', s:'Gain/perte non réalisé titres', c:pnlActions>=0?'g':'r'},
-    {l:'P&L options flottant', v:(pnlOptsUSD>=0?'+':'')+fi(pnlOptsUSD)+'$ USD',
-        s:'Non réalisé · CAD '+(pnlOptsCAD>=0?'+':'')+fi(Math.round(pnlOptsCAD))+'$ · éq. total $'+fi(Math.round(pnlOpts))+' USD',
-        c:pnlOpts>=0?'g':'r'},
+    {l:'P&L actions',          v:(pnlActionsCAD>=0?'+':'')+fi(Math.round(pnlActionsCAD))+'$ CAD',
+        s:'Cumul CAD+USD · CAD '+(pnlActCADn>=0?'+':'')+fi(Math.round(pnlActCADn))+'$ · USD '+(pnlActUSDn>=0?'+':'')+fi(Math.round(pnlActUSDn))+'$', c:pnlActionsCAD>=0?'g':'r'},
+    {l:'P&L options flottant', v:(pnlOptsCADtot>=0?'+':'')+fi(Math.round(pnlOptsCADtot))+'$ CAD',
+        s:'Cumul CAD+USD · CAD '+(pnlOptsCAD>=0?'+':'')+fi(Math.round(pnlOptsCAD))+'$ · USD '+(pnlOptsUSD>=0?'+':'')+fi(Math.round(pnlOptsUSD))+'$',
+        c:pnlOptsCADtot>=0?'g':'r'},
   ];
   var mkKpi = function(i){ return '<div class="kpi" style="flex:1;min-width:140px;max-width:200px">'+
     '<div class="kpi-l">'+i.l+'</div>'+
@@ -4515,13 +4527,14 @@ function pilotStatut(o, refRend){
 }
 
 function pilotAgg(L){
-  var a={notion:0,deltaEq:0,vega:0,gamma:0,theta:0,ve:0,jour:0,not90:0,parExpi:{},parFacteur:{}};
+  var a={notion:0,deltaEq:0,vega:0,gamma:0,theta:0,ve:0,jour:0,not90:0,not180:0,parExpi:{},parFacteur:{}};
   var FACT={SPY:'Actions US',QQQ:'Actions US',NVDA:'Actions US',SPYM:'Actions US',
             GLD:'Or',XEG:'Énergie',IBIT:'Bitcoin'};
   L.forEach(function(o){
     a.notion+=o.notion; a.deltaEq+=o.deltaEq; a.vega+=o.vega; a.gamma+=o.gamma;
     a.theta+=o.theta; a.ve+=o.ve; a.jour+=o.jour;
     if(o.dte<=90) a.not90+=o.notion;
+    if(o.dte<=180) a.not180+=o.notion;
     var e=o.expiration||'—';
     a.parExpi[e]=(a.parExpi[e]||0)+o.notion;
     var f=FACT[o.tk]||'Autre';
@@ -4626,8 +4639,6 @@ function renderPilotage(){
 
   // ── 1. CAPACITÉ ──────────────────────────────────────────
   var notTot = a.notion;
-  var maxExpiNom='—', maxExpiVal=0;
-  Object.keys(a.parExpi).forEach(function(k){ if(a.parExpi[k]>maxExpiVal){maxExpiVal=a.parExpi[k];maxExpiNom=k;} });
 
   // Détail des jambes du panier
   PN.legs.forEach(function(l){
@@ -4712,23 +4723,29 @@ function renderPilotage(){
           +'<td class="pil-num" style="color:'+(isB?'var(--amber)':'var(--muted)')+'">'+(c.x>90?'—':c.x.toFixed(1))+'</td></tr>';
       }).join('')+'</tbody>';
 
-  // Jauges
+  // Jauges — valeur $ affichée en plus du % (demande utilisateur).
+  // Les 3 premières = plafonds de risque ; ≤90j garde son plafond ;
+  // ≤180j est informatif (distribution des échéances, sans plafond).
   var gj=[
-    {l:'Marge utilisée',        v:brute>0?m.margeReq/brute*100:0,       cap:s.mx,  suf:'%'},
-    {l:'Delta-équiv / avoir',   v:avoir>0?Math.abs(a.deltaEq)/avoir*100:0, cap:s.dx*100, suf:'%'},
-    {l:'Notionnel / brute',     v:brute>0?notTot/brute*100:0,           cap:s.nx*100, suf:'%'},
-    {l:'Notionnel ≤ 90j',       v:notTot>0?a.not90/notTot*100:0,        cap:s.t90, suf:'%'},
-    {l:'Plus grosse échéance',  v:notTot>0?maxExpiVal/notTot*100:0,     cap:s.ex,  suf:'%'}
+    {l:'Marge utilisée',      cur:m.margeReq,          v:brute>0?m.margeReq/brute*100:0,           cap:s.mx,     suf:'%'},
+    {l:'Delta-équiv / avoir', cur:Math.abs(a.deltaEq), v:avoir>0?Math.abs(a.deltaEq)/avoir*100:0,  cap:s.dx*100, suf:'%'},
+    {l:'Notionnel / brute',   cur:notTot,              v:brute>0?notTot/brute*100:0,               cap:s.nx*100, suf:'%'},
+    {l:'Notionnel ≤ 90j',     cur:a.not90,             v:notTot>0?a.not90/notTot*100:0,            cap:s.t90,    suf:'%'},
+    {l:'Notionnel ≤ 180j',    cur:a.not180,            v:notTot>0?a.not180/notTot*100:0,           cap:0,        suf:'%', info:true}
   ];
   document.getElementById('pil-gauges').innerHTML = gj.map(function(x){
     var ratio=x.cap>0?x.v/x.cap:0;
-    var c = ratio>=1?'var(--red)':ratio>=0.8?'var(--amber)':'var(--green)';
-    var w = Math.min(100, x.v/Math.max(x.cap*1.35,1)*100);
-    var cp= Math.min(100, x.cap/Math.max(x.cap*1.35,1)*100);
+    var c = x.info ? 'var(--qqq)' : (ratio>=1?'var(--red)':ratio>=0.8?'var(--amber)':'var(--green)');
+    var scale = x.info ? 100 : Math.max(x.cap*1.35,1);   // jauge info = échelle 0–100 %
+    var w  = Math.min(100, x.v/scale*100);
+    var cp = x.info ? -1 : Math.min(100, x.cap/scale*100);
+    var money = '$'+fi(Math.round(x.cur))+' · ';
+    var valTxt = x.info ? (money+x.v.toFixed(0)+x.suf+' not.')
+                        : (money+x.v.toFixed(0)+x.suf+' / '+x.cap.toFixed(0)+x.suf);
     return '<div class="pil-gauge"><span class="pil-gauge-l">'+x.l+'</span>'
       +'<span class="pil-gauge-bg"><span class="pil-gauge-f" style="width:'+w+'%;background:'+c+'"></span>'
-      +'<span class="pil-gauge-cap" style="left:'+cp+'%"></span></span>'
-      +'<span class="pil-gauge-v" style="color:'+c+'">'+x.v.toFixed(0)+x.suf+' / '+x.cap.toFixed(0)+x.suf+'</span></div>';
+      +(cp>=0?'<span class="pil-gauge-cap" style="left:'+cp+'%"></span>':'')+'</span>'
+      +'<span class="pil-gauge-v" style="color:'+c+'">'+valTxt+'</span></div>';
   }).join('');
 
   // ── 2. EXPOSITION ────────────────────────────────────────
