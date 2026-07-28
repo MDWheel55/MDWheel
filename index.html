@@ -4548,7 +4548,7 @@ function pilotAgg(L){
     if(o.dte<=180) a.not180+=o.notion;
     var e=o.expiration||'—';
     a.parExpi[e]=(a.parExpi[e]||0)+o.notion;
-    var f=FACT[o.tk]||'Autre';
+    var f=o.tk||'Autre';   // regroupé par sous-jacent (QQQ/SPY/GLD/XEG…), pas par facteur
     if(!a.parFacteur[f]) a.parFacteur[f]={notion:0,delta:0};
     a.parFacteur[f].notion+=o.notion;
     a.parFacteur[f].delta +=o.deltaEq;
@@ -4862,20 +4862,21 @@ function renderPilotage(){
   var fk=Object.keys(a.parFacteur).sort(function(x,y){
     return Math.abs(a.parFacteur[y].delta)-Math.abs(a.parFacteur[x].delta); });
   var dTot=fk.reduce(function(t,k){ return t+Math.abs(a.parFacteur[k].delta); },0);
+  var tkCls=function(t){ return t==='QQQ'?'tq':t==='SPY'?'ts':t==='GLD'?'tg':t==='XEG'?'tx':'tn'; };
+  var tkCol=function(t){ return t==='QQQ'?'var(--qqq)':t==='SPY'?'var(--spy)':t==='GLD'?'var(--gld)':t==='XEG'?'var(--xeg)':'var(--blue)'; };
   document.getElementById('pil-facteurs').innerHTML =
-    '<thead><tr><th>Facteur de risque</th><th class="pil-num">Notionnel</th><th class="pil-num">% not.</th>'
+    '<thead><tr><th>Sous-jacent</th><th class="pil-num">Notionnel</th><th class="pil-num">% not.</th>'
     +'<th class="pil-num">Delta-équiv</th><th class="pil-num">% delta</th><th style="width:26%"></th></tr></thead><tbody>'
     + fk.map(function(k){
         var f=a.parFacteur[k];
         var pn=notTot>0?f.notion/notTot*100:0, pd=dTot>0?Math.abs(f.delta)/dTot*100:0;
         var ec=pd-pn;
-        return '<tr><td>'+k+'</td>'
+        return '<tr><td><span class="tk '+tkCls(k)+'">'+k+'</span></td>'
           +'<td class="pil-num">$'+fi(Math.round(f.notion))+'</td>'
           +'<td class="pil-num" style="color:var(--muted)">'+pn.toFixed(0)+'%</td>'
           +'<td class="pil-num">$'+fi(Math.round(Math.abs(f.delta)))+'</td>'
           +'<td class="pil-num" style="color:'+(ec>6?'var(--amber)':'var(--text)')+'">'+pd.toFixed(0)+'%</td>'
-          +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+pd.toFixed(0)+'%;background:'
-            +(ec>6?'var(--amber)':'var(--qqq)')+'"></div></div></td></tr>';
+          +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+pd.toFixed(0)+'%;background:'+tkCol(k)+'"></div></div></td></tr>';
       }).join('')+'</tbody>';
 
   // ── 3. ÉCHÉANCES ─────────────────────────────────────────
