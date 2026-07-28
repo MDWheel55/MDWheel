@@ -324,7 +324,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:1.5rem" id="pil-expo-kpi"></div>
 
   <!-- ══ REVENU PAR TRANCHE DE TENOR ══ -->
-  <div class="sec">Revenu par tranche de tenor <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400">&middot; cap sur l'objectif mensuel</span></div>
+  <div class="sec">Revenu par tranche de tenor <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400">&middot; cap sur l'objectif mensuel &middot; montants en USD</span></div>
+  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+    <label style="font-size:12px;color:var(--muted)">Objectif mensuel (USD)&nbsp;$</label>
+    <input class="pil-inp" id="pil-obj" type="number" step="500" min="0" value="10000" onchange="renderPilotage()" style="width:92px">
+    <span style="font-size:11px;color:var(--dim)">&middot; ajustable &mdash; revenus et objectif en USD</span>
+  </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-rev-kpi"></div>
   <div class="pil-wrap" style="margin-bottom:6px"><table class="pil-tbl" id="pil-tenor"></table></div>
   <div class="pil-note" id="pil-tenor-note" style="margin-bottom:1.5rem"></div>
@@ -4780,7 +4785,7 @@ function renderPilotage(){
   // Chaque position tombe dans un bucket de DTE. Le thêta de chaque bucket
   // s'additionne au thêta du livre (+X$/j). Le revenu /mois = prime linéaire
   // (prime ÷ durée) × 30,44 j — la même base que le rendement %/an du livre.
-  var OBJ = 10000;      // objectif mensuel (USD)
+  var OBJ = (function(){ var e=document.getElementById('pil-obj'); var v=e?parseFloat(e.value):NaN; return (isNaN(v)||v<0)?10000:v; })();  // objectif mensuel — éditable via #pil-obj (USD)
   var JPM = 30.44;      // jours/mois moyen
   var TB=[
     {l:'≤ 90j',      lo:0,   hi:90},
