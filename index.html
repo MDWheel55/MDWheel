@@ -4864,14 +4864,17 @@ function renderPilotage(){
   var dTot=fk.reduce(function(t,k){ return t+Math.abs(a.parFacteur[k].delta); },0);
   var tkCls=function(t){ return t==='QQQ'?'tq':t==='SPY'?'ts':t==='GLD'?'tg':t==='XEG'?'tx':'tn'; };
   var tkCol=function(t){ return t==='QQQ'?'var(--qqq)':t==='SPY'?'var(--spy)':t==='GLD'?'var(--gld)':t==='XEG'?'var(--xeg)':'var(--blue)'; };
+  var cCount=function(t){ return L.reduce(function(s,o){ return s+(o.tk===t?o.qty:0); },0); };  // # contrats par sous-jacent
+  var TR='style="text-align:right"';   // corrige l'alignement des en-têtes num. (.pil-tbl th force left)
   document.getElementById('pil-facteurs').innerHTML =
-    '<thead><tr><th>Sous-jacent</th><th class="pil-num">Notionnel</th><th class="pil-num">% not.</th>'
-    +'<th class="pil-num">Delta-équiv</th><th class="pil-num">% delta</th><th style="width:26%"></th></tr></thead><tbody>'
+    '<thead><tr><th>Sous-jacent</th><th class="pil-num" '+TR+'>Contrats</th><th class="pil-num" '+TR+'>Notionnel</th><th class="pil-num" '+TR+'>% not.</th>'
+    +'<th class="pil-num" '+TR+'>Delta-équiv</th><th class="pil-num" '+TR+'>% delta</th><th style="width:24%"></th></tr></thead><tbody>'
     + fk.map(function(k){
         var f=a.parFacteur[k];
         var pn=notTot>0?f.notion/notTot*100:0, pd=dTot>0?Math.abs(f.delta)/dTot*100:0;
         var ec=pd-pn;
         return '<tr><td><span class="tk '+tkCls(k)+'">'+k+'</span></td>'
+          +'<td class="pil-num" style="color:var(--muted)">'+cCount(k)+'</td>'
           +'<td class="pil-num">$'+fi(Math.round(f.notion))+'</td>'
           +'<td class="pil-num" style="color:var(--muted)">'+pn.toFixed(0)+'%</td>'
           +'<td class="pil-num">$'+fi(Math.round(Math.abs(f.delta)))+'</td>'
