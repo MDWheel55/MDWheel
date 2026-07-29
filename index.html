@@ -179,6 +179,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 .pil-tbl tr.bind td{background:rgba(255,184,48,0.07);}
 .pil-tbl tr:hover td{background:rgba(255,255,255,0.02);}
 .pil-num{text-align:right;font-weight:700;}
+.pil-tbl th.pil-num{text-align:right;}   /* en-têtes num. alignés au-dessus des valeurs (corrige th=left) */
 .pil-wrap{background:var(--s1);border:1px solid var(--border);border-radius:4px;overflow-x:auto;margin-bottom:1.25rem;}
 .pil-gauge{display:flex;align-items:center;gap:8px;padding:5px 0;}
 .pil-gauge-l{font-family:var(--mono);font-size:9px;color:var(--muted);min-width:118px;}
@@ -4864,11 +4865,10 @@ function renderPilotage(){
   var dTot=fk.reduce(function(t,k){ return t+Math.abs(a.parFacteur[k].delta); },0);
   var tkCls=function(t){ return t==='QQQ'?'tq':t==='SPY'?'ts':t==='GLD'?'tg':t==='XEG'?'tx':'tn'; };
   var tkCol=function(t){ return t==='QQQ'?'var(--qqq)':t==='SPY'?'var(--spy)':t==='GLD'?'var(--gld)':t==='XEG'?'var(--xeg)':'var(--blue)'; };
-  var cCount=function(t){ return L.reduce(function(s,o){ return s+(o.tk===t?o.qty:0); },0); };  // # contrats par sous-jacent
-  var TR='style="text-align:right"';   // corrige l'alignement des en-têtes num. (.pil-tbl th force left)
+  var cCount=function(t){ return L.reduce(function(s,o){ return s+((o.tk===t && !o.isLong && !o.isCall)?o.qty:0); },0); };  // puts vendus (short) — ceux qui immobilisent la marge
   document.getElementById('pil-facteurs').innerHTML =
-    '<thead><tr><th>Sous-jacent</th><th class="pil-num" '+TR+'>Contrats</th><th class="pil-num" '+TR+'>Notionnel</th><th class="pil-num" '+TR+'>% not.</th>'
-    +'<th class="pil-num" '+TR+'>Delta-équiv</th><th class="pil-num" '+TR+'>% delta</th><th style="width:24%"></th></tr></thead><tbody>'
+    '<thead><tr><th>Sous-jacent</th><th class="pil-num">Puts vendus</th><th class="pil-num">Notionnel</th><th class="pil-num">% not.</th>'
+    +'<th class="pil-num">Delta-équiv</th><th class="pil-num">% delta</th><th style="width:24%"></th></tr></thead><tbody>'
     + fk.map(function(k){
         var f=a.parFacteur[k];
         var pn=notTot>0?f.notion/notTot*100:0, pd=dTot>0?Math.abs(f.delta)/dTot*100:0;
