@@ -326,10 +326,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 
   <!-- ══ REVENU PAR TRANCHE DE TENOR ══ -->
   <div class="sec">Revenu par tranche de tenor <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400">&middot; cap sur l'objectif mensuel &middot; montants en USD</span></div>
-  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-    <label style="font-size:12px;color:var(--muted)">Objectif mensuel (USD)&nbsp;$</label>
-    <input class="pil-inp" id="pil-obj" type="number" step="500" min="0" value="10000" onchange="renderPilotage()" style="width:92px">
-    <span style="font-size:11px;color:var(--dim)">&middot; ajustable &mdash; revenus et objectif en USD</span>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+    <label style="font-size:12px;color:var(--muted)">Objectif (USD)&nbsp;$</label>
+    <input class="pil-inp" id="pil-obj" type="number" step="500" min="0" value="5000" onchange="renderPilotage()" style="width:78px">
+    <label style="font-size:12px;color:var(--muted)">Rendement cible&nbsp;%/an</label>
+    <input class="pil-inp" id="pil-rdt" type="number" step="1" min="0" value="18" onchange="renderPilotage()" style="width:58px">
+    <label style="font-size:12px;color:var(--muted)">Marge déployée&nbsp;$</label>
+    <input class="pil-inp" id="pil-mdep" type="number" step="1000" min="0" placeholder="plafond" onchange="renderPilotage()" style="width:92px">
+    <span style="font-size:11px;color:var(--dim)">&middot; potentiel = rendement × marge ⁄ 12 · tout en USD</span>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-rev-kpi"></div>
   <div class="pil-wrap" style="margin-bottom:6px"><table class="pil-tbl" id="pil-tenor"></table></div>
@@ -4231,21 +4235,21 @@ function recalcCompte() {
     kpi1.map(mkKpi).join('');
 
   // Revenu mensuel
-  var notQ=positions.filter(function(p){return p.ticker==='QQQ'&&p.statut==='short';}).reduce(function(s,p){return s+parseFloat(p.strike)*100*parseInt(p.contrats);},0);
-  var notS2=positions.filter(function(p){return p.ticker==='SPY'&&p.statut==='short';}).reduce(function(s,p){return s+parseFloat(p.strike)*100*parseInt(p.contrats);},0);
-  var notG=positions.filter(function(p){return p.ticker==='GLD'&&p.statut==='short';}).reduce(function(s,p){return s+parseFloat(p.strike)*100*parseInt(p.contrats);},0);
-  var revPuts=Math.round((notQ*0.11+notS2*0.12+notG*0.10)*1.5/12);
+  // Revenu passif : options RÉELLES (prime réelle du livre, source unique = onglet pilotage)
+  // + revenu fixe. Fini l'estimation « 11–12% × 1.5 » sur notionnel : on affiche le vrai.
+  var revPuts=Math.round((function(){ try{ var LL=pilotPositions(),ss=0; LL.forEach(function(o){ if(o.ve>0) ss+=o.jour; }); return ss*30.44; }catch(e){ return 0; } })());
   var revCBIL=Math.round(qC*pC*0.036/12/fx2);
   var revUBIL=Math.round(qU*pU*0.039/12);
   var revDiv=Math.round((qV*0.76/fx2+qX*0.71/fx2+qS*0.88)/12);
   var totalMensuel=revPuts+revUBIL+revDiv+Math.round(revCBIL/fx2);
+  var OBJp=(function(){ var e=document.getElementById('pil-obj'); var v=e?parseFloat(e.value):NaN; return (isNaN(v)||v<=0)?5000:v; })();  // objectif partagé, éditable (pilotage)
   var revKpis=[
-    {l:'Puts QQQ/SPY/GLD',      v:'$'+fi(revPuts),  s:'11–12% × 1.5 cycles / 12', c:'g'},
+    {l:'Options (réel)',        v:'$'+fi(revPuts),  s:'prime réelle du livre · pilotage', c:'g'},
     {l:'CBIL-C (3.6%)',         v:'$'+fi(revCBIL)+' CAD', s:qC+' unités', c:''},
     {l:'UBIL.U-C (3.9%)',       v:'$'+fi(revUBIL),  s:qU+' unités', c:''},
     {l:'Dividendes',            v:'$'+fi(revDiv),    s:'VEQT + XEG + SPYM', c:''},
-    {l:'TOTAL MENSUEL ESTIMÉ',  v:'~$'+fi(totalMensuel), s:'Objectif: $10–12K/mois', c:totalMensuel>=10000?'g':totalMensuel>=7000?'a':'r'},
-    {l:'Objectif atteint',      v:Math.round(totalMensuel/10000*100)+'%', s:'de $10 000/mois', c:totalMensuel>=10000?'g':totalMensuel>=7000?'a':'r'},
+    {l:'TOTAL PASSIF /MOIS',    v:'~$'+fi(totalMensuel), s:'options réelles + revenu fixe', c:totalMensuel>=OBJp?'g':totalMensuel>=OBJp*0.7?'a':'r'},
+    {l:'Objectif atteint',      v:Math.round(totalMensuel/OBJp*100)+'%', s:'de $'+fi(OBJp)+'/mois (éditable)', c:totalMensuel>=OBJp?'g':totalMensuel>=OBJp*0.7?'a':'r'},
   ];
   var revEl=document.getElementById('revenu-kpis');
   if(revEl) revEl.innerHTML=revKpis.map(function(i){
@@ -4812,10 +4816,19 @@ function renderPilotage(){
   var pctObj  = OBJ>0 ? revMois/OBJ*100 : 0;
   var money$  = function(n){ return (n>=0?'+$':'−$')+fi(Math.abs(Math.round(n))); };
 
+  // Potentiel réaliste : rendement cible (%/an sur marge, éditable #pil-rdt) × marge déployée
+  // (#pil-mdep, défaut = plafond marge = brute × mx%), le tout /12. À comparer au réel du livre.
+  var rdtC  = (function(){ var e=document.getElementById('pil-rdt'); var v=e?parseFloat(e.value):NaN; return (isNaN(v)||v<0)?18:v; })();
+  var plafM = brute*s.mx/100;
+  var mDep  = (function(){ var e=document.getElementById('pil-mdep'); var v=e?parseFloat(e.value):NaN; return (isNaN(v)||v<=0)?plafM:v; })();
+  var potMois = rdtC/100*mDep/12;
+
   document.getElementById('pil-rev-kpi').innerHTML = [
-    {l:'Revenu estimé /mois', v:'$'+fi(Math.round(revMois)),
-     s:'prime linéaire · '+(TT.ve>0?(TT.jourM*365/TT.ve*100).toFixed(0):'0')+'%/an sur marge', c:'var(--green)'},
-    {l:'Objectif mensuel', v:'$'+fi(OBJ), s:'cible de revenu', c:'var(--muted)'},
+    {l:'Réel /mois', v:'$'+fi(Math.round(revMois)),
+     s:'prime réelle du livre · '+(TT.ve>0?(TT.jourM*365/TT.ve*100).toFixed(0):'0')+'%/an sur marge', c:'var(--green)'},
+    {l:'Potentiel réaliste /mois', v:'$'+fi(Math.round(potMois)),
+     s:rdtC.toFixed(0)+'%/an × $'+fi(Math.round(mDep))+' marge déployée', c:'var(--qqq)'},
+    {l:'Objectif mensuel', v:'$'+fi(OBJ), s:'cible · éditable', c:'var(--muted)'},
     {l:(ecart>0?'Écart à combler':'Objectif atteint'),
      v:(ecart>0?'$'+fi(Math.round(ecart)):'✓ +$'+fi(Math.round(-ecart))),
      s:pctObj.toFixed(0)+'% de l\'objectif', c:ecart>0?'var(--red)':'var(--green)'},
