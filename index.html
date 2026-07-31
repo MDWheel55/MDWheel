@@ -563,6 +563,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 
   <!-- REVENU MENSUEL -->
   <div class="sec">REVENU PASSIF MENSUEL ESTIMÉ</div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+    <label style="font-size:12px;color:var(--muted)">Objectif passif (USD)&nbsp;$</label>
+    <input class="pil-inp" id="c-obj" type="number" step="500" min="0" value="5000" onchange="recalcCompte()" style="width:82px">
+    <span style="font-size:11px;color:var(--muted)">&middot; total passif = options réelles + T-bills + dividendes · propre au Compte (≠ objectif puts du pilotage)</span>
+  </div>
   <div class="kpi-grid" id="revenu-kpis"></div>
 
   <!-- GRAPHIQUE PERFORMANCE -->
@@ -4237,19 +4242,23 @@ function recalcCompte() {
   // Revenu mensuel
   // Revenu passif : options RÉELLES (prime réelle du livre, source unique = onglet pilotage)
   // + revenu fixe. Fini l'estimation « 11–12% × 1.5 » sur notionnel : on affiche le vrai.
-  var revPuts=Math.round((function(){ try{ var LL=pilotPositions(),ss=0; LL.forEach(function(o){ if(o.ve>0) ss+=o.jour; }); return ss*30.44; }catch(e){ return 0; } })());
-  var revCBIL=Math.round(qC*pC*0.036/12/fx2);
-  var revUBIL=Math.round(qU*pU*0.039/12);
-  var revDiv=Math.round((qV*0.76/fx2+qX*0.71/fx2+qS*0.88)/12);
-  var totalMensuel=revPuts+revUBIL+revDiv+Math.round(revCBIL/fx2);
-  var OBJp=(function(){ var e=document.getElementById('pil-obj'); var v=e?parseFloat(e.value):NaN; return (isNaN(v)||v<=0)?5000:v; })();  // objectif partagé, éditable (pilotage)
+  // Devises explicites : options = USD, CBIL-C = CAD natif, UBIL.U-C = USD natif,
+  // dividendes VEQT/XEG (CAD→USD) + SPYM (USD) = USD. Total affiché en USD ET en CAD.
+  var revPuts=Math.round((function(){ try{ var LL=pilotPositions(),ss=0; LL.forEach(function(o){ if(o.ve>0) ss+=o.jour; }); return ss*30.44; }catch(e){ return 0; } })());  // USD
+  var cbilCAD=Math.round(qC*pC*0.036/12);                        // intérêt CBIL-C, natif CAD
+  var revUBIL=Math.round(qU*pU*0.039/12);                        // intérêt UBIL.U-C, natif USD
+  var revDiv =Math.round((qV*0.76/fx2+qX*0.71/fx2+qS*0.88)/12);  // dividendes, converti USD
+  var totalUSD=revPuts+revUBIL+revDiv+Math.round(cbilCAD/fx2);   // total passif en USD
+  var totalCAD=Math.round(totalUSD*fx2);                          // même total, en CAD
+  var OBJc=(function(){ var e=document.getElementById('c-obj'); var v=e?parseFloat(e.value):NaN; return (isNaN(v)||v<=0)?5000:v; })();  // objectif passif propre au Compte (USD, éditable)
   var revKpis=[
-    {l:'Options (réel)',        v:'$'+fi(revPuts),  s:'prime réelle du livre · pilotage', c:'g'},
-    {l:'CBIL-C (3.6%)',         v:'$'+fi(revCBIL)+' CAD', s:qC+' unités', c:''},
-    {l:'UBIL.U-C (3.9%)',       v:'$'+fi(revUBIL),  s:qU+' unités', c:''},
-    {l:'Dividendes',            v:'$'+fi(revDiv),    s:'VEQT + XEG + SPYM', c:''},
-    {l:'TOTAL PASSIF /MOIS',    v:'~$'+fi(totalMensuel), s:'options réelles + revenu fixe', c:totalMensuel>=OBJp?'g':totalMensuel>=OBJp*0.7?'a':'r'},
-    {l:'Objectif atteint',      v:Math.round(totalMensuel/OBJp*100)+'%', s:'de $'+fi(OBJp)+'/mois (éditable)', c:totalMensuel>=OBJp?'g':totalMensuel>=OBJp*0.7?'a':'r'},
+    {l:'Options (réel)',        v:'$'+fi(revPuts)+' USD',   s:'prime réelle du livre · pilotage', c:'g'},
+    {l:'CBIL-C (3.6%)',         v:'$'+fi(cbilCAD)+' CAD',   s:qC+' unités · natif CAD', c:''},
+    {l:'UBIL.U-C (3.9%)',       v:'$'+fi(revUBIL)+' USD',   s:qU+' unités · natif USD', c:''},
+    {l:'Dividendes',            v:'$'+fi(revDiv)+' USD',    s:'VEQT + XEG + SPYM · converti USD', c:''},
+    {l:'TOTAL PASSIF (USD)',    v:'~$'+fi(totalUSD)+' USD', s:'options réelles + revenu fixe', c:totalUSD>=OBJc?'g':totalUSD>=OBJc*0.7?'a':'r'},
+    {l:'TOTAL PASSIF (CAD)',    v:'~$'+fi(totalCAD)+' CAD', s:'≈ USD × '+fx2.toFixed(3), c:''},
+    {l:'Objectif atteint',      v:Math.round(totalUSD/OBJc*100)+'%', s:'de $'+fi(OBJc)+' USD/mois · éditable', c:totalUSD>=OBJc?'g':totalUSD>=OBJc*0.7?'a':'r'},
   ];
   var revEl=document.getElementById('revenu-kpis');
   if(revEl) revEl.innerHTML=revKpis.map(function(i){
