@@ -561,11 +561,43 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
 
 
-  <!-- LIGNE KPIs SYNTHÈSE -->
+  <!-- SYNTHÈSE DU COMPTE -->
   <div class="sec">SYNTHÈSE DU COMPTE</div>
-  <div id="compte-kpis" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:1.5rem"></div>
 
-  <!-- REVENU MENSUEL -->
+  <!-- SECTION 1 : Compte total + graphique performance (2 colonnes) -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:14px">
+    <div id="compte-total-box" style="flex:1 1 220px;min-width:200px;max-width:300px;display:flex"></div>
+    <div id="perf-chart-container" style="flex:3 1 420px;min-width:300px;position:relative;background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:1rem;min-height:220px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em">PERFORMANCE DU PORTEFEUILLE</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-d" id="perf-v-sem"   style="padding:3px 10px;font-size:10px" onclick="setPerfView('semaine')">Semaine</button>
+          <button class="btn btn-p" id="perf-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('mois')">Mois</button>
+          <button class="btn btn-d" id="perf-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPerfView('annee')">Année</button>
+          <button class="btn btn-d" id="perf-v-tout"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('tout')">Tout</button>
+        </div>
+      </div>
+      <div id="perf-chart" style="width:100%;min-height:190px"></div>
+      <div id="perf-no-data" style="position:absolute;top:38px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-family:var(--mono);padding:1rem">
+        Données insuffisantes — le graphique se remplira automatiquement lors des actualisations quotidiennes
+      </div>
+      <div id="perf-stats" style="display:flex;gap:16px;margin-top:8px;font-family:var(--mono);font-size:10px;flex-wrap:wrap"></div>
+    </div>
+  </div>
+
+  <!-- SECTION 2 : Actions (avec P&L) -->
+  <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">ACTIONS</div>
+  <div id="compte-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px"></div>
+
+  <!-- SECTION 3 : T-bills -->
+  <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">T-BILLS · COLLATÉRAL</div>
+  <div id="compte-tbills" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px"></div>
+
+  <!-- SECTION 4 : Cash -->
+  <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">CASH</div>
+  <div id="compte-cash" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:1.5rem"></div>
+
+  <!-- REVENU MENSUEL (inchangé, à la fin) -->
   <div class="sec">REVENU PASSIF MENSUEL ESTIMÉ</div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
     <label style="font-size:12px;color:var(--muted)">Objectif passif (USD)&nbsp;$</label>
@@ -573,24 +605,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <span style="font-size:11px;color:var(--muted)">&middot; total passif = options réelles + T-bills + dividendes · propre au Compte (≠ objectif puts du pilotage)</span>
   </div>
   <div class="kpi-grid" id="revenu-kpis"></div>
-
-  <!-- GRAPHIQUE PERFORMANCE -->
-  <div class="sec" style="display:flex;align-items:center;justify-content:space-between;margin-top:1rem">
-    <span>PERFORMANCE DU PORTEFEUILLE</span>
-    <div style="display:flex;gap:6px;align-items:center">
-      <button class="btn btn-d" id="perf-v-sem"   style="padding:3px 10px;font-size:10px" onclick="setPerfView('semaine')">Semaine</button>
-      <button class="btn btn-p" id="perf-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('mois')">Mois</button>
-      <button class="btn btn-d" id="perf-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPerfView('annee')">Année</button>
-      <button class="btn btn-d" id="perf-v-tout"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('tout')">Tout</button>
-    </div>
-  </div>
-  <div id="perf-chart-container" style="position:relative;background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:1rem;margin-bottom:1.5rem;min-height:220px">
-    <div id="perf-chart" style="width:100%;min-height:190px"></div>
-    <div id="perf-no-data" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-family:var(--mono)">
-      Données insuffisantes — le graphique se remplira automatiquement lors des actualisations quotidiennes
-    </div>
-    <div id="perf-stats" style="display:flex;gap:16px;margin-top:8px;font-family:var(--mono);font-size:10px;flex-wrap:wrap"></div>
-  </div>
 
 </div>
 
@@ -3445,6 +3459,8 @@ function renderActionsTable() {
   // Sous-totaux par section (dans la devise de la section)
   var totSecCAD = {val:0, cout:0, pnl:0, empr:0};
   var totSecUSD = {val:0, cout:0, pnl:0, empr:0};
+  var TBILL_KEYS = {CBIL:1, UBIL:1};        // exclus du P&L « actions »
+  var pnlStkCADn = 0, pnlStkUSDn = 0;       // P&L actions HORS T-bills, par devise native
 
   actions.forEach(function(a) {
     var coutTot  = a.qty * a.pxAchat;
@@ -3460,6 +3476,7 @@ function renderActionsTable() {
     totalPnlUSD += pnlUSD;
     var sec = a.usd ? totSecUSD : totSecCAD;
     sec.val += valMkt; sec.cout += coutTot; sec.pnl += pnlDol; sec.empr += empr;
+    if(!TBILL_KEYS[a.key]){ if(a.usd) pnlStkUSDn += pnlDol; else pnlStkCADn += pnlDol; }
 
     var pnlCol  = pnlDol>=0?'var(--green)':'var(--red)';
     var colDev  = a.dev==='CAD'?'var(--blue)':'var(--amber)';
@@ -3534,8 +3551,10 @@ function renderActionsTable() {
 
   // Stocker le P&L total actions pour les KPIs du compte
   window._pnlActionsUSD  = totalPnlUSD;      // équiv. USD (compat)
-  window._pnlActionsCADn = totSecCAD.pnl;    // P&L actions CAD, natif CAD
-  window._pnlActionsUSDn = totSecUSD.pnl;    // P&L actions USD, natif USD
+  window._pnlActionsCADn = totSecCAD.pnl;    // P&L actions CAD, natif CAD (inclut CBIL)
+  window._pnlActionsUSDn = totSecUSD.pnl;    // P&L actions USD, natif USD (inclut UBIL)
+  window._pnlStkCADn     = pnlStkCADn;       // P&L actions CAD HORS T-bills : VEQT, XEG
+  window._pnlStkUSDn     = pnlStkUSDn;       // P&L actions USD HORS T-bills : SPYM, GLD, IBIT
   renderPnlActRealized();
 }
 
@@ -4230,27 +4249,57 @@ function recalcCompte() {
   var pnlActUSDn   = window._pnlActionsUSDn || 0;                 // actions, natif USD
   var pnlActionsCAD = pnlActCADn + pnlActUSDn * fx2;             // cumul actions en CAD
   var pnlOptsCADtot = pnlOptsCAD + pnlOptsUSD * fx2;            // cumul options en CAD
-  // KPI Ligne 1 — Valeur & Performance
-  // Groupé pour lisibilité : Total, Actions, Options, Cash — chacun montant + P&L (P&L en CAD).
-  var pnlTotalCAD   = pnlActionsCAD + pnlOptsCADtot;                // P&L global (actions + options)
-  var valActionsUSD = valV+valX+valS+valC+valU+valGLD+valIBIT;     // valeur actions, USD
-  var cashTotalCAD  = cashC2 + cashU2*fx2;                          // cash total, CAD
-  var kpi1 = [
-    {l:'COMPTE TOTAL',     v:'$'+fi(totalCAD)+' CAD',                          s:'~$'+fi(total)+' USD',                            c:'g', pnl:pnlTotalCAD},
-    {l:'Actions',          v:'$'+fi(Math.round(valActionsUSD*fx2))+' CAD',      s:'~$'+fi(Math.round(valActionsUSD))+' USD',        c:'',  pnl:pnlActionsCAD},
-    {l:'Options (marché)', v:'$'+fi(Math.round(valOpts*fx2))+' CAD',            s:'~$'+fi(Math.round(valOpts))+' USD · valeur nette', c:'', pnl:pnlOptsCADtot},
-    {l:'Cash (ensemble)',  v:'$'+fi(Math.round(cashTotalCAD))+' CAD',           s:'USD $'+fi(cashU2)+' · CAD $'+fi(cashC2),         c:cashTotalCAD>=120000?'g':'a', pnl:null},
-  ];
-  var mkKpi = function(i){ return '<div class="kpi" style="flex:1;min-width:160px;max-width:230px">'+
-    '<div class="kpi-l">'+i.l+'</div>'+
-    '<div class="kpi-v'+(i.c?' '+i.c:'')+'">'+i.v+'</div>'+
-    '<div class="kpi-s">'+i.s+'</div>'+
-    (i.pnl!=null ? '<div class="kpi-s" style="color:'+(i.pnl>=0?'var(--green)':'var(--red)')+';font-weight:600">P&amp;L '+(i.pnl>=0?'+':'')+fi(Math.round(i.pnl))+'$ CAD</div>' : '')
-    +'</div>'; };
-  var kpiEl = document.getElementById('compte-kpis');
-  if(kpiEl) kpiEl.innerHTML =
-    '<div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">VALEUR & PERFORMANCE</div>'+
-    kpi1.map(mkKpi).join('');
+  // ═══ CARTES SYNTHÈSE — 4 sections ═══
+  // Valeurs ventilées (toutes en USD ; ×fx2 pour l'affichage CAD)
+  var valActUS  = valS + valGLD + valIBIT;   // actions réglées USD : SPYM, GLD, IBIT
+  var valActCAD = valV + valX;               // actions réglées CAD : VEQT, XEG
+  // P&L actions HORS T-bills, par devise native (source : renderActionsTable)
+  var pnlStkCADn = window._pnlStkCADn || 0;  // VEQT, XEG (CAD)
+  var pnlStkUSDn = window._pnlStkUSDn || 0;  // SPYM, GLD, IBIT (USD)
+
+  // Fabrique de carte : montant + sous-titre + P&L optionnel (dans sa devise native)
+  var mkCard = function(o){
+    var pnlHtml = '';
+    if(o.pnl != null){
+      var col = o.pnl>=0?'var(--green)':'var(--red)';
+      pnlHtml = '<div class="kpi-s" style="color:'+col+';font-weight:600">P&amp;L '+(o.pnl>=0?'+':'')+fi(Math.round(o.pnl))+'$ '+(o.pnlDev||'CAD')+'</div>';
+    }
+    return '<div class="kpi" style="flex:1;min-width:170px;max-width:250px">'+
+      '<div class="kpi-l">'+o.l+'</div>'+
+      '<div class="kpi-v'+(o.c?' '+o.c:'')+'">'+o.v+'</div>'+
+      '<div class="kpi-s">'+o.s+'</div>'+ pnlHtml +
+    '</div>';
+  };
+
+  // SECTION 1 — Compte total (carte pleine hauteur, à gauche du graphique)
+  var boxEl = document.getElementById('compte-total-box');
+  if(boxEl) boxEl.innerHTML =
+    '<div class="kpi" style="flex:1;display:flex;flex-direction:column;justify-content:center;width:100%">'+
+      '<div class="kpi-l">COMPTE TOTAL</div>'+
+      '<div class="kpi-v g" style="font-size:24px">$'+fi(totalCAD)+' CAD</div>'+
+      '<div class="kpi-s">~$'+fi(total)+' USD</div>'+
+    '</div>';
+
+  // SECTION 2 — Actions (avec P&L, devise native)
+  var actEl = document.getElementById('compte-actions');
+  if(actEl) actEl.innerHTML = [
+    {l:'ACTIONS CAD', v:'$'+fi(Math.round(valActCAD*fx2))+' CAD', s:'VEQT · XEG · ~$'+fi(Math.round(valActCAD))+' USD',        c:'', pnl:pnlStkCADn, pnlDev:'CAD'},
+    {l:'ACTIONS US',  v:'$'+fi(Math.round(valActUS*fx2))+' CAD',  s:'SPYM · GLD · IBIT · ~$'+fi(Math.round(valActUS))+' USD', c:'', pnl:pnlStkUSDn, pnlDev:'USD'},
+  ].map(mkCard).join('');
+
+  // SECTION 3 — T-bills (CBIL natif CAD / UBIL natif USD), valeur seule
+  var tbEl = document.getElementById('compte-tbills');
+  if(tbEl) tbEl.innerHTML = [
+    {l:'T-BILL CAD · CBIL', v:'$'+fi(Math.round(valC*fx2))+' CAD', s:fi(Math.round(qC))+' unités · natif CAD',                       c:''},
+    {l:'T-BILL US · UBIL',  v:'$'+fi(Math.round(valU*fx2))+' CAD', s:fi(Math.round(qU))+' unités · ~$'+fi(Math.round(valU))+' USD',  c:''},
+  ].map(mkCard).join('');
+
+  // SECTION 4 — Cash (USD / CAD séparés)
+  var cashEl = document.getElementById('compte-cash');
+  if(cashEl) cashEl.innerHTML = [
+    {l:'CASH CAD', v:'$'+fi(Math.round(cashC2))+' CAD',     s:'natif CAD',                                    c:cashC2>=0?'':'r'},
+    {l:'CASH USD', v:'$'+fi(Math.round(cashU2*fx2))+' CAD', s:'~$'+fi(Math.round(cashU2))+' USD · natif USD', c:cashU2>=0?'':'r'},
+  ].map(mkCard).join('');
 
   // Revenu mensuel
   // Revenu passif : options RÉELLES (prime réelle du livre, source unique = onglet pilotage)
