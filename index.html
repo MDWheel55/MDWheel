@@ -250,6 +250,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
   <div class="pil-wrap"><table class="pil-tbl" id="pil-cap"></table></div>
 
+  <div class="sec">Volatilité par sous-jacent <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400">&middot; prime riche quand l'IV est élevée &middot; RSI &lt; 40 = repli favorable</span></div>
+  <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-iv"></table></div>
+
   <div class="sec">Seuil de rachat implicite &middot; ce que rapporterait ce panier</div>
   <div id="scn-seuil" style="margin-bottom:1.25rem"></div>
 
@@ -847,7 +850,7 @@ function syncAcctFromActions() {
 // Positions chargées depuis Google Sheets (source de vérité unique)
 // Ne RIEN hardcoder ici — tout vient de Sheets via loadAll()
 let positions = [];
-let mkt = {QQQ:716,SPY:739,GLD:391,VIX:18.68,NVDA:208,
+let mkt = {QQQ:716,SPY:739,GLD:391,VIX:18.68,VXN:20.5,GVZ:16.0,NVDA:208,
   VEQT:59.19,XEG:26.11,SPYM:85.75,CBIL:50.03,UBIL:50.05,IBIT:34.94,USDCAD:1.3945};
 let rsiData = {QQQ:65,SPY:62,GLD:40,NVDA:55};
 // Ratios P/E — mis à jour manuellement hebdomadaire (source: FactSet Earnings Insight)
@@ -1120,16 +1123,20 @@ async function yahooQuote(sym) {
   }
 
   // Essai 3: proxies CORS publics avec validation stricte des valeurs
-  const map = {'USDCAD=X':'CAD=X','VIX':'^VIX'};
+  const map = {'USDCAD=X':'CAD=X','VIX':'^VIX','VXN':'^VXN','GVZ':'^GVZ'};
   const ySym = map[sym] || sym;
   const url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(ySym) + '?interval=1d&range=1d';
 
   // Plages de validation par symbole
   const validRange = {
     'VIX':       {min: 8,    max: 80},
+    'VXN':       {min: 8,    max: 90},
+    'GVZ':       {min: 5,    max: 80},
     'USDCAD=X':  {min: 1.1,  max: 1.6},
     'CAD=X':     {min: 1.1,  max: 1.6},
     '^VIX':      {min: 8,    max: 80},
+    '^VXN':      {min: 8,    max: 90},
+    '^GVZ':      {min: 5,    max: 80},
   };
   const range = validRange[sym] || validRange[ySym] || {min: 0.01, max: 99999};
 
@@ -1334,9 +1341,11 @@ async function actualiserTout() {
       return { c: 0 };
     };
     // QQQ/SPY/GLD/NVDA/IBIT/SPYM = cotés aux US -> MarketData ; VIX -> Yahoo (^VIX).
-    const [q,s,g,n,ibit,spym,v] = await Promise.all([
+    const [q,s,g,n,ibit,spym,v,vxn,gvz] = await Promise.all([
       usQuote('QQQ'), usQuote('SPY'), usQuote('GLD'), usQuote('NVDA'), usQuote('IBIT'), usQuote('SPYM'),
-      yahooQuote('VIX').catch(()=>({c:0}))
+      yahooQuote('VIX').catch(()=>({c:0})),
+      yahooQuote('VXN').catch(()=>({c:0})),   // IV Nasdaq-100 (proxy QQQ)
+      yahooQuote('GVZ').catch(()=>({c:0}))    // IV or (proxy GLD)
     ]);
     if(q.c>0) mkt.QQQ=q.c;
     if(s.c>0) mkt.SPY=s.c;
@@ -1345,6 +1354,8 @@ async function actualiserTout() {
     if(ibit.c>0) mkt.IBIT=prixValide('IBIT',ibit.c,mkt.IBIT);
     if(spym.c>0) mkt.SPYM=prixValide('SPYM',spym.c,mkt.SPYM);
     if(v.c>0 && v.c < 80) mkt.VIX=v.c;  // VIX réaliste entre 0 et 80
+    if(vxn.c>0 && vxn.c < 90) mkt.VXN=vxn.c;
+    if(gvz.c>0 && gvz.c < 80) mkt.GVZ=gvz.c;
     {
       // FX USD/CAD via le BACKEND (getFX) — côté serveur, comme les options.
       // Pas de CORS, pas de course Promise.all : Yahoo CAD=X primaire, frankfurter en repli.
@@ -4752,7 +4763,9 @@ function renderPilotage(){
   // base = dénominateur du % (marge brute pour marge/notionnel, avoir pour delta).
   // La colonne « / plafond » rappelle la limite. La distribution par tenor
   // (≤90j / ≤180j …) vit dans le tableau « Revenu par tranche ».
+  var stG = pilotStress(L, m, -15, 15);   // choc −15 % / IV +15 → delta stressé = indicateur de risque CENTRAL
   var gj=[
+    {l:'Delta stressé (−15%)', cur:Math.abs(stG.deltaAp), base:avoir, bl:'avoir', v:avoir>0?Math.abs(stG.deltaAp)/avoir*100:0, cap:100},
     {l:'Marge utilisée', cur:m.margeReq,          base:brute, bl:'brute', v:brute>0?m.margeReq/brute*100:0,          cap:s.mx},
     {l:'Delta-équiv',    cur:Math.abs(a.deltaEq), base:avoir, bl:'avoir', v:avoir>0?Math.abs(a.deltaEq)/avoir*100:0, cap:s.dx*100},
     {l:'Notionnel brut', cur:notTot,              base:brute, bl:'brute', v:brute>0?notTot/brute*100:0,              cap:s.nx*100}
@@ -4769,6 +4782,39 @@ function renderPilotage(){
             +' <span style="font-size:9px;color:var(--dim)">'+x.bl+'</span></td>'
           +'<td class="pil-num" style="color:'+c+'">'+x.v.toFixed(0)+'%</td>'
           +'<td class="pil-num" style="color:var(--muted);font-weight:400">'+x.cap.toFixed(0)+'%</td>'
+          +'</tr>';
+      }).join('')+'</tbody>';
+
+  // ── IV / Volatilité par sous-jacent : quand ouvrir (prime riche) ──
+  // Indices de vol live : VXN→QQQ, VIX→SPY, GVZ→GLD. XEG : pas d'indice → IV
+  // moyenne des jambes XEG du livre. Feu préliminaire : IV élevée = prime riche,
+  // RSI < 40 = repli favorable, IV basse = prime maigre → attendre.
+  var ivRows = [
+    {tk:'QQQ', iv:mkt.VXN, src:'VXN', lo:18, hi:28},
+    {tk:'SPY', iv:mkt.VIX, src:'VIX', lo:14, hi:24},
+    {tk:'GLD', iv:mkt.GVZ, src:'GVZ', lo:13, hi:20},
+    {tk:'XEG', iv:null,    src:'—',   lo:20, hi:35}
+  ];
+  try{ var LX=L.filter(function(o){return o.tk==='XEG';}); if(LX.length){ var sx=0; LX.forEach(function(o){sx+=o.iv;}); ivRows[3].iv=sx/LX.length*100; ivRows[3].src='livre'; } }catch(e){}
+  document.getElementById('pil-iv').innerHTML =
+    '<thead><tr><th>Sous-jacent</th><th class="pil-num">IV</th><th>Source</th><th>Régime prime</th><th class="pil-num">RSI</th><th>Ouverture</th></tr></thead><tbody>'
+    + ivRows.map(function(r){
+        var tkc = r.tk==='QQQ'?'tq':r.tk==='SPY'?'ts':r.tk==='GLD'?'tg':'tx';
+        var rsi = (rsiData && rsiData[r.tk]!=null) ? rsiData[r.tk] : null;
+        var ivv = (r.iv!=null && isFinite(r.iv)) ? r.iv : null;
+        var reg='n/d', regc='var(--dim)';
+        if(ivv!=null){ if(ivv>=r.hi){reg='élevée (riche)';regc='var(--green)';} else if(ivv<=r.lo){reg='basse (maigre)';regc='var(--red)';} else {reg='normale';regc='var(--amber)';} }
+        var favIV=ivv!=null&&ivv>=r.hi, favRSI=rsi!=null&&rsi<40, poorIV=ivv!=null&&ivv<=r.lo;
+        var feu,feuc,why=[];
+        if(poorIV && !favRSI){ feu='🔴 attendre'; feuc='var(--red)'; why.push('prime maigre'); }
+        else if(favIV||favRSI){ feu='🟢 favorable'; feuc='var(--green)'; if(favIV)why.push('IV élevée'); if(favRSI)why.push('RSI '+rsi); }
+        else { feu='🟡 neutre'; feuc='var(--amber)'; why.push('IV normale'); }
+        return '<tr><td><span class="tk '+tkc+'">'+r.tk+'</span></td>'
+          +'<td class="pil-num">'+(ivv!=null?ivv.toFixed(1):'—')+'</td>'
+          +'<td style="color:var(--muted);font-size:9px">'+r.src+'</td>'
+          +'<td style="color:'+regc+'">'+reg+'</td>'
+          +'<td class="pil-num" style="color:'+(favRSI?'var(--green)':'var(--muted)')+'">'+(rsi!=null?rsi:'—')+'</td>'
+          +'<td style="color:'+feuc+';font-weight:600">'+feu+' <span style="color:var(--muted);font-weight:400;font-size:9px">'+why.join(' · ')+'</span></td>'
           +'</tr>';
       }).join('')+'</tbody>';
 
