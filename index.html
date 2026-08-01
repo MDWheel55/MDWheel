@@ -250,8 +250,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
   <div class="pil-wrap"><table class="pil-tbl" id="pil-cap"></table></div>
 
-  <div class="sec">Volatilité par sous-jacent <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400">&middot; prime riche quand l'IV est élevée &middot; RSI &lt; 40 = repli favorable</span></div>
-  <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-iv"></table></div>
+  <div class="sec">Volatilité par sous-jacent <span style="text-transform:none;letter-spacing:0;color:var(--muted);font-weight:400">&middot; IV Rank = où se situe l'IV du jour dans sa fourchette</span></div>
+  <div class="pil-wrap" style="margin-bottom:6px"><table class="pil-tbl" id="pil-iv"></table></div>
+  <div class="pil-note" style="margin-bottom:1.5rem">🟢 <b>favorable</b> : IV Rank &ge; 60 (prime riche) <b>ou</b> RSI &lt; 40 (repli) &nbsp;·&nbsp; 🟡 <b>neutre</b> : IV Rank entre 30 et 60 (et RSI &ge; 40) &nbsp;·&nbsp; 🔴 <b>attendre</b> : IV Rank &le; 30 (prime maigre). Le « N j » = jours d'historique IV accumulés (localStorage, par appareil) ; l'IV Rank s'affine avec le temps.</div>
 
   <div class="sec">Seuil de rachat implicite &middot; ce que rapporterait ce panier</div>
   <div id="scn-seuil" style="margin-bottom:1.25rem"></div>
@@ -942,12 +943,14 @@ async function reloadFromSheets() {
 
 async function loadAll() {
   setSyncStatus(false, 'Chargement...');
-  const [pos, cpt, trades, actions] = await Promise.all([
+  const [pos, cpt, trades, actions, ivh] = await Promise.all([
     gsApi({action:'getPositions'}),
     gsApi({action:'getCompte'}),
     gsApi({action:'getTrades'}),
-    gsApi({action:'getActions'})
+    gsApi({action:'getActions'}),
+    gsApi({action:'getIVHist'}).catch(()=>null)   // historique IV multi-appareils
   ]);
+  ivHistMerge(ivh);   // fusionne l'historique IV du Sheet dans le cache local
   // Charger les actions depuis Positions_Actions (source de vérité unique)
   if (actions && actions.length > 0) {
     actionsData = actions.map(a => ({
@@ -4228,23 +4231,22 @@ function recalcCompte() {
   var pnlActionsCAD = pnlActCADn + pnlActUSDn * fx2;             // cumul actions en CAD
   var pnlOptsCADtot = pnlOptsCAD + pnlOptsUSD * fx2;            // cumul options en CAD
   // KPI Ligne 1 — Valeur & Performance
+  // Groupé pour lisibilité : Total, Actions, Options, Cash — chacun montant + P&L (P&L en CAD).
+  var pnlTotalCAD   = pnlActionsCAD + pnlOptsCADtot;                // P&L global (actions + options)
+  var valActionsUSD = valV+valX+valS+valC+valU+valGLD+valIBIT;     // valeur actions, USD
+  var cashTotalCAD  = cashC2 + cashU2*fx2;                          // cash total, CAD
   var kpi1 = [
-    {l:'Valeur totale compte', v:'$'+fi(totalCAD), s:'~$'+fi(total)+' USD · options '+(valOptsUSD>=0?'+':'')+fi(Math.round(valOptsUSD))+'$ USD'
-        + (Math.round(valOptsCAD)!==0 ? ' · '+(valOptsCAD>=0?'+':'')+fi(Math.round(valOptsCAD))+'$ CAD' : ''), c:'g'},
-    {l:'Actions USD',          v:'$'+fi(valS+valU+valGLD+valIBIT), s:'SPYM + UBIL.U + GLD + IBIT', c:''},
-    {l:'Actions CAD',          v:'$'+fi((valV+valX+valC)*fx2), s:'VEQT + XEG + CBIL · CAD', c:''},
-    {l:'Cash USD',             v:'$'+fi(cashU2), s:'Liquidités USD disponibles', c:cashU2>=40000?'g':'a'},
-    {l:'Cash CAD',             v:'$'+fi(cashC2), s:'Liquidités CAD · $'+fi(Math.round(cashC2/fx2))+' USD éq.', c:cashC2>=50000?'g':'a'},
-    {l:'P&L actions',          v:(pnlActionsCAD>=0?'+':'')+fi(Math.round(pnlActionsCAD))+'$ CAD',
-        s:'Cumul CAD+USD · CAD '+(pnlActCADn>=0?'+':'')+fi(Math.round(pnlActCADn))+'$ · USD '+(pnlActUSDn>=0?'+':'')+fi(Math.round(pnlActUSDn))+'$', c:pnlActionsCAD>=0?'g':'r'},
-    {l:'P&L options flottant', v:(pnlOptsCADtot>=0?'+':'')+fi(Math.round(pnlOptsCADtot))+'$ CAD',
-        s:'Cumul CAD+USD · CAD '+(pnlOptsCAD>=0?'+':'')+fi(Math.round(pnlOptsCAD))+'$ · USD '+(pnlOptsUSD>=0?'+':'')+fi(Math.round(pnlOptsUSD))+'$',
-        c:pnlOptsCADtot>=0?'g':'r'},
+    {l:'COMPTE TOTAL',     v:'$'+fi(totalCAD)+' CAD',                          s:'~$'+fi(total)+' USD',                            c:'g', pnl:pnlTotalCAD},
+    {l:'Actions',          v:'$'+fi(Math.round(valActionsUSD*fx2))+' CAD',      s:'~$'+fi(Math.round(valActionsUSD))+' USD',        c:'',  pnl:pnlActionsCAD},
+    {l:'Options (marché)', v:'$'+fi(Math.round(valOpts*fx2))+' CAD',            s:'~$'+fi(Math.round(valOpts))+' USD · valeur nette', c:'', pnl:pnlOptsCADtot},
+    {l:'Cash (ensemble)',  v:'$'+fi(Math.round(cashTotalCAD))+' CAD',           s:'USD $'+fi(cashU2)+' · CAD $'+fi(cashC2),         c:cashTotalCAD>=120000?'g':'a', pnl:null},
   ];
-  var mkKpi = function(i){ return '<div class="kpi" style="flex:1;min-width:140px;max-width:200px">'+
+  var mkKpi = function(i){ return '<div class="kpi" style="flex:1;min-width:160px;max-width:230px">'+
     '<div class="kpi-l">'+i.l+'</div>'+
     '<div class="kpi-v'+(i.c?' '+i.c:'')+'">'+i.v+'</div>'+
-    '<div class="kpi-s">'+i.s+'</div></div>'; };
+    '<div class="kpi-s">'+i.s+'</div>'+
+    (i.pnl!=null ? '<div class="kpi-s" style="color:'+(i.pnl>=0?'var(--green)':'var(--red)')+';font-weight:600">P&amp;L '+(i.pnl>=0?'+':'')+fi(Math.round(i.pnl))+'$ CAD</div>' : '')
+    +'</div>'; };
   var kpiEl = document.getElementById('compte-kpis');
   if(kpiEl) kpiEl.innerHTML =
     '<div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">VALEUR & PERFORMANCE</div>'+
@@ -4639,6 +4641,44 @@ function pilotPreset(n){
   renderPilotage();
 }
 
+// ── Historique IV pour l'IV Rank : cache local (localStorage) + Google Sheet (multi-appareils) ──
+function _ivRead(){ try{ return JSON.parse(localStorage.getItem('ivHist')||'{}'); }catch(e){ return {}; } }
+function _ivWrite(h){ try{ localStorage.setItem('ivHist', JSON.stringify(h)); }catch(e){} }
+// Fusionne les lignes reçues du Sheet (getIVHist) dans le cache local, sans écraser le local.
+function ivHistMerge(rows){
+  if(!rows || !rows.length) return;
+  var h=_ivRead(), changed=false;
+  rows.forEach(function(r){
+    var k=r.date||r.Date; if(!k) return;
+    if(!h[k]){ h[k]={VXN:parseFloat(r.VXN)||null, VIX:parseFloat(r.VIX)||null, GVZ:parseFloat(r.GVZ)||null}; changed=true; }
+  });
+  if(changed) _ivWrite(h);
+}
+function ivHistLog(vals){
+  var h=_ivRead();
+  try{
+    var d=new Date();
+    var key=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+    var cur=h[key];
+    if(!cur || cur.VXN!==vals.VXN || cur.VIX!==vals.VIX || cur.GVZ!==vals.GVZ){
+      h[key]=vals;
+      var ks=Object.keys(h).sort();
+      if(ks.length>400) ks.slice(0,ks.length-400).forEach(function(k){ delete h[k]; });
+      _ivWrite(h);
+      // pousse vers le Sheet une fois par jour, sans bloquer le rendu (échec silencieux si l'action n'existe pas encore)
+      if(typeof gsApi==='function'){ try{ gsApi({action:'logIV', date:key, VXN:vals.VXN, VIX:vals.VIX, GVZ:vals.GVZ}); }catch(e){} }
+    }
+  }catch(e){}
+  return h;
+}
+function ivRank(hist, field, val, seedLo, seedHi){
+  var lo=seedLo, hi=seedHi, n=0;
+  try{ Object.keys(hist).forEach(function(k){ var v=hist[k]&&hist[k][field];
+    if(v!=null && isFinite(v)){ n++; if(v<lo)lo=v; if(v>hi)hi=v; } }); }catch(e){}
+  var rank = hi>lo ? Math.max(0,Math.min(100,(val-lo)/(hi-lo)*100)) : 50;
+  return {rank:rank, days:n};
+}
+
 function pilotSeuils(){
   var g=function(id,d){ var e=document.getElementById(id); var v=e?parseFloat(e.value):NaN; return isNaN(v)?d:v; };
   return {mx:g('pil-mx',50), dx:g('pil-dx',0.50), nx:g('pil-nx',3.0), t90:g('pil-t90',35), ex:g('pil-ex',20)};
@@ -4789,30 +4829,32 @@ function renderPilotage(){
   // Indices de vol live : VXN→QQQ, VIX→SPY, GVZ→GLD. XEG : pas d'indice → IV
   // moyenne des jambes XEG du livre. Feu préliminaire : IV élevée = prime riche,
   // RSI < 40 = repli favorable, IV basse = prime maigre → attendre.
+  var ivHist = ivHistLog({VXN:mkt.VXN, VIX:mkt.VIX, GVZ:mkt.GVZ});   // log quotidien pour l'IV Rank
   var ivRows = [
-    {tk:'QQQ', iv:mkt.VXN, src:'VXN', lo:18, hi:28},
-    {tk:'SPY', iv:mkt.VIX, src:'VIX', lo:14, hi:24},
-    {tk:'GLD', iv:mkt.GVZ, src:'GVZ', lo:13, hi:20},
-    {tk:'XEG', iv:null,    src:'—',   lo:20, hi:35}
+    {tk:'QQQ', iv:mkt.VXN, fld:'VXN', src:'VXN', sLo:12, sHi:45},
+    {tk:'SPY', iv:mkt.VIX, fld:'VIX', src:'VIX', sLo:10, sHi:40},
+    {tk:'GLD', iv:mkt.GVZ, fld:'GVZ', src:'GVZ', sLo:9,  sHi:35},
+    {tk:'XEG', iv:null,    fld:null,  src:'—',   sLo:0,  sHi:0}
   ];
   try{ var LX=L.filter(function(o){return o.tk==='XEG';}); if(LX.length){ var sx=0; LX.forEach(function(o){sx+=o.iv;}); ivRows[3].iv=sx/LX.length*100; ivRows[3].src='livre'; } }catch(e){}
   document.getElementById('pil-iv').innerHTML =
-    '<thead><tr><th>Sous-jacent</th><th class="pil-num">IV</th><th>Source</th><th>Régime prime</th><th class="pil-num">RSI</th><th>Ouverture</th></tr></thead><tbody>'
+    '<thead><tr><th>Sous-jacent</th><th class="pil-num">IV</th><th class="pil-num">IV Rank</th><th>Source</th><th class="pil-num">RSI</th><th>Ouverture</th></tr></thead><tbody>'
     + ivRows.map(function(r){
         var tkc = r.tk==='QQQ'?'tq':r.tk==='SPY'?'ts':r.tk==='GLD'?'tg':'tx';
         var rsi = (rsiData && rsiData[r.tk]!=null) ? rsiData[r.tk] : null;
         var ivv = (r.iv!=null && isFinite(r.iv)) ? r.iv : null;
-        var reg='n/d', regc='var(--dim)';
-        if(ivv!=null){ if(ivv>=r.hi){reg='élevée (riche)';regc='var(--green)';} else if(ivv<=r.lo){reg='basse (maigre)';regc='var(--red)';} else {reg='normale';regc='var(--amber)';} }
-        var favIV=ivv!=null&&ivv>=r.hi, favRSI=rsi!=null&&rsi<40, poorIV=ivv!=null&&ivv<=r.lo;
+        var rk  = (r.fld && ivv!=null) ? ivRank(ivHist, r.fld, ivv, r.sLo, r.sHi) : null;
+        var rank= rk ? rk.rank : null;
+        var rankc = rank==null?'var(--dim)':rank>=60?'var(--green)':rank<=30?'var(--red)':'var(--amber)';
+        var favIV=rank!=null&&rank>=60, poorIV=rank!=null&&rank<=30, favRSI=rsi!=null&&rsi<40;
         var feu,feuc,why=[];
         if(poorIV && !favRSI){ feu='🔴 attendre'; feuc='var(--red)'; why.push('prime maigre'); }
-        else if(favIV||favRSI){ feu='🟢 favorable'; feuc='var(--green)'; if(favIV)why.push('IV élevée'); if(favRSI)why.push('RSI '+rsi); }
-        else { feu='🟡 neutre'; feuc='var(--amber)'; why.push('IV normale'); }
+        else if(favIV||favRSI){ feu='🟢 favorable'; feuc='var(--green)'; if(favIV)why.push('IVR '+rank.toFixed(0)); if(favRSI)why.push('RSI '+rsi); }
+        else { feu='🟡 neutre'; feuc='var(--amber)'; why.push(rank!=null?'IVR '+rank.toFixed(0):'IVR n/d'); }
         return '<tr><td><span class="tk '+tkc+'">'+r.tk+'</span></td>'
           +'<td class="pil-num">'+(ivv!=null?ivv.toFixed(1):'—')+'</td>'
+          +'<td class="pil-num" style="color:'+rankc+'">'+(rank!=null?rank.toFixed(0):'—')+(rk?' <span style="font-size:8px;color:var(--dim)">'+rk.days+'j</span>':'')+'</td>'
           +'<td style="color:var(--muted);font-size:9px">'+r.src+'</td>'
-          +'<td style="color:'+regc+'">'+reg+'</td>'
           +'<td class="pil-num" style="color:'+(favRSI?'var(--green)':'var(--muted)')+'">'+(rsi!=null?rsi:'—')+'</td>'
           +'<td style="color:'+feuc+';font-weight:600">'+feu+' <span style="color:var(--muted);font-weight:400;font-size:9px">'+why.join(' · ')+'</span></td>'
           +'</tr>';
