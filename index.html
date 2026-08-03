@@ -211,6 +211,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <button class="nav-tab" onclick="showTab('dashboard',this)">Pilotage</button>
   <button class="nav-tab" onclick="showTab('options',this)">Options</button>
   <button class="nav-tab" onclick="showTab('actions',this)">Actions</button>
+  <button class="nav-tab" onclick="showTab('compta',this)">Compta</button>
   <button class="nav-tab" onclick="showTab('scenario',this)">Scénario</button>
   <button class="nav-tab" onclick="showTab('tresorerie',this)">Trésorerie</button>
   <button class="nav-tab" onclick="showTab('parametres',this)">Paramètres</button>
@@ -609,6 +610,33 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 </div>
 
 
+<!-- PANEL COMPTA — fins de mois rapides (P&L réalisé mensuel, tout en CAD) -->
+<div class="panel" id="tab-compta">
+
+  <div class="sec" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span>COMPTA — P&L RÉALISÉ PAR MOIS</span>
+    <span style="font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400">P&L réalisé (options fermées + ventes d'actions) · USD converti au taux du jour de la transaction · tout en CAD</span>
+  </div>
+
+  <div id="compta-resume" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem"></div>
+
+  <div class="pwrap" style="margin-bottom:1rem">
+    <table class="ptbl">
+      <thead id="compta-head"></thead>
+      <tbody id="compta-body"></tbody>
+      <tfoot id="compta-foot"></tfoot>
+    </table>
+  </div>
+
+  <div style="margin-top:0.75rem;font-size:10px;color:var(--muted);line-height:1.5">
+    Chaque montant est en CAD. Les colonnes « US » sont converties depuis l'USD au taux de change du jour de chaque transaction
+    (cache <span style="font-family:var(--mono)">FX_Historique</span> ; un <span style="font-family:var(--mono)">*</span> signale un mois où au moins une conversion a utilisé le taux du jour faute d'historique).
+    Le P&L d'un mois correspond à la date de <em>réalisation</em> : fermeture d'option (rachat / vente / expiration) ou vente d'action.
+  </div>
+
+</div>
+
+
 <!-- PANEL TRÉSORERIE -->
 <div class="panel" id="tab-tresorerie">
 
@@ -904,6 +932,14 @@ function showTab(name, el) {
   if(name === 'actions') {
     renderStocks(); renderActionsTable();
     gsApi({action:'getTradesActions'}).then(function(ta){ if(ta) renderTradesActions(ta); });
+  }
+  if(name === 'compta') {
+    // Les trades options sont déjà en cache (loadAll). Les trades actions ne le
+    // sont que si l'onglet Actions a été visité : on les charge au besoin.
+    if(!window._tradesActCache) {
+      gsApi({action:'getTradesActions'}).then(function(ta){ if(ta) renderTradesActions(ta); renderCompta(); });
+    } else { renderCompta(); }
+    chargerFXHistorique();   // remplit FX_Historique pour les conversions USD→CAD exactes
   }
 }
 
@@ -3613,8 +3649,165 @@ async function chargerFXHistorique() {
       Object.keys(r.rates).forEach(d => { window._fxHist[d] = r.rates[d]; });
       renderPnlActRealized();
       renderPnlRealized();
+      renderCompta();
     }
   } finally { _fxHistEnCours = false; }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  COMPTA — P&L RÉALISÉ MENSUEL (fins de mois rapides)
+//  Réutilise EXACTEMENT les règles de renderPnlRealized (options)
+//  et renderPnlActRealized (actions). Chaque calculateur renvoie
+//  une liste [{date, dev, pnl}] où pnl est en devise NATIVE (CAD/USD).
+//  La conversion USD→CAD au taux du jour du trade se fait dans
+//  renderCompta via fxDuTrade (cache FX_Historique, repli taux du jour).
+// ═══════════════════════════════════════════════════════════
+
+// Options : P&L réalisé par fermeture (BTC/STC/EXP), prime d'ouverture FIFO moyenne.
+function comptaOptRealised() {
+  const trades = tradesCache || [];
+  const posKey = t => [t.ticker, t.type, String(t.strike), t.expiration].join('|');
+  const openBook = {};
+  trades.forEach(t => {
+    const k = posKey(t);
+    const qty = Math.abs(parseInt(t.contrats)||1);
+    const prix = parseFloat(t.prix)||0;
+    if (t.action === 'STO' || t.action === 'BTO') {
+      openBook[k] = openBook[k] || {totalPrime:0, totalQty:0};
+      openBook[k].totalPrime += prix * qty;
+      openBook[k].totalQty  += qty;
+    }
+  });
+  function calcPnl(t) {
+    const k = posKey(t);
+    const qty = Math.abs(parseInt(t.contrats)||1);
+    const prixFerm = parseFloat(t.prix)||0;
+    const book = openBook[k];
+    const primeMoyOuv = book && book.totalQty > 0 ? book.totalPrime / book.totalQty : 0;
+    const prixUnitaire = prixFerm > 2000 ? 0 : prixFerm;
+    const primeMoy     = primeMoyOuv > 2000 ? 0 : primeMoyOuv;
+    let pnl = 0;
+    if (t.action === 'EXP')      pnl = Math.round(primeMoy * qty * 100);
+    else if (t.action === 'BTC') pnl = Math.round((primeMoy - prixUnitaire) * qty * 100);
+    else if (t.action === 'STC') pnl = Math.round((prixUnitaire - primeMoy) * qty * 100);
+    if (Math.abs(pnl) > 500000) return 0;
+    return pnl;
+  }
+  return trades
+    .filter(t => ['BTC','STC','EXP'].includes(t.action) && t.date)
+    .map(t => ({ date: t.date, dev: deviseTicker(t.ticker), pnl: calcPnl(t) }));
+}
+
+// Actions : P&L réalisé par VENTE = (prix vente − coût moyen au moment) × qté − frais.
+function comptaActRealised() {
+  const trades = window._tradesActCache || [];
+  const costBook = {}, costAtVente = {};
+  const sorted = [...trades].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  sorted.forEach(t => {
+    const op  = (t.operation||'').toUpperCase();
+    const sym = t.symbole;
+    const qty = Math.abs(parseFloat(t.quantite)||0);
+    const px  = Math.abs(parseFloat(t.prix)||0);
+    if (!costBook[sym]) costBook[sym] = {totalCost:0, totalQty:0};
+    if (op === 'ACHAT') { costBook[sym].totalCost += px * qty; costBook[sym].totalQty += qty; }
+    else if (op === 'VENTE') {
+      const coutMoy = costBook[sym].totalQty > 0 ? costBook[sym].totalCost / costBook[sym].totalQty : 0;
+      costAtVente[t.tradeId || (sym+t.date)] = coutMoy;
+      const nb = Math.min(qty, costBook[sym].totalQty);
+      costBook[sym].totalCost -= coutMoy * nb;
+      costBook[sym].totalQty  -= nb;
+    }
+  });
+  function pnlVente(t) {
+    const qty     = Math.abs(parseFloat(t.quantite)||0);
+    const pxVente = Math.abs(parseFloat(t.prix)||0);
+    const frais   = Math.abs(parseFloat(t.frais)||0);
+    const coutMoy = costAtVente[t.tradeId || (t.symbole+t.date)] || 0;
+    return Math.round((pxVente - coutMoy) * qty - frais);
+  }
+  return trades
+    .filter(t => (t.operation||'').toUpperCase() === 'VENTE' && t.date)
+    .map(t => ({ date: t.date, dev: devTradeAction(t), pnl: pnlVente(t) }));
+}
+
+// Agrège par mois (YYYY-MM), convertit l'USD en CAD au taux du jour du trade,
+// et rend le tableau + les cartes résumé du panneau Compta.
+function renderCompta() {
+  const head = document.getElementById('compta-head');
+  const body = document.getElementById('compta-body');
+  const foot = document.getElementById('compta-foot');
+  const resume = document.getElementById('compta-resume');
+  if (!head || !body) return;
+
+  const opt = comptaOptRealised();
+  const act = comptaActRealised();
+  const mois = d => String(d||'').slice(0,7);
+
+  const M = {}; // 'YYYY-MM' → {actCAD, actUS, optCAD, optUS, approx}  (tous en CAD)
+  const bucket = m => (M[m] = M[m] || {actCAD:0, actUS:0, optCAD:0, optUS:0, approx:false});
+
+  act.forEach(r => { const b = bucket(mois(r.date));
+    if (r.dev === 'CAD') b.actCAD += r.pnl;
+    else { const f = fxDuTrade(r.date); b.actUS += r.pnl * f.rate; if (f.approx) b.approx = true; } });
+  opt.forEach(r => { const b = bucket(mois(r.date));
+    if (r.dev === 'CAD') b.optCAD += r.pnl;
+    else { const f = fxDuTrade(r.date); b.optUS += r.pnl * f.rate; if (f.approx) b.approx = true; } });
+
+  const keys = Object.keys(M).sort((a,b) => b.localeCompare(a)); // mois récent en premier
+  const col  = v => v>=0 ? 'var(--green)' : 'var(--red)';
+  const cell = v => { const n = Math.round(v); return '<td style="text-align:right;font-family:var(--mono);color:'+col(n)+'">'+(n>=0?'+':'')+fi(n)+'$</td>'; };
+
+  head.innerHTML = '<tr>'
+    + '<th>MOIS</th>'
+    + '<th style="text-align:right">ACTIONS CAD</th>'
+    + '<th style="text-align:right">ACTIONS US</th>'
+    + '<th style="text-align:right">OPTIONS CAD</th>'
+    + '<th style="text-align:right">OPTIONS US</th>'
+    + '<th style="text-align:right">TOTAL CAD</th>'
+    + '</tr>';
+
+  if (!keys.length) {
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1.5rem">Aucun P&L réalisé — ferme une option ou vends une action pour alimenter la Compta</td></tr>';
+    foot.innerHTML = '';
+    if (resume) resume.innerHTML = '';
+    return;
+  }
+
+  const T = {actCAD:0, actUS:0, optCAD:0, optUS:0, tot:0};
+  body.innerHTML = keys.map(m => {
+    const b = M[m];
+    const tot = b.actCAD + b.actUS + b.optCAD + b.optUS;
+    T.actCAD += b.actCAD; T.actUS += b.actUS; T.optCAD += b.optCAD; T.optUS += b.optUS; T.tot += tot;
+    const label = m + (b.approx ? ' <span style="color:var(--amber)" title="au moins une conversion au taux du jour">*</span>' : '');
+    const tn = Math.round(tot);
+    return '<tr>'
+      + '<td style="font-family:var(--mono);font-weight:600">'+label+'</td>'
+      + cell(b.actCAD) + cell(b.actUS) + cell(b.optCAD) + cell(b.optUS)
+      + '<td style="text-align:right;font-family:var(--mono);font-weight:700;color:'+col(tn)+'">'+(tn>=0?'+':'')+fi(tn)+'$</td>'
+      + '</tr>';
+  }).join('');
+
+  const tt = Math.round(T.tot);
+  foot.innerHTML = '<tr style="border-top:2px solid var(--border)">'
+    + '<td style="padding:8px;font-weight:700;font-size:10px;color:var(--muted)">TOTAL</td>'
+    + cell(T.actCAD) + cell(T.actUS) + cell(T.optCAD) + cell(T.optUS)
+    + '<td style="text-align:right;font-family:var(--mono);font-weight:800;color:'+col(tt)+'">'+(tt>=0?'+':'')+fi(tt)+'$</td>'
+    + '</tr>';
+
+  if (resume) {
+    const cards = [
+      {l:'ACTIONS CAD', v:T.actCAD}, {l:'ACTIONS US', v:T.actUS},
+      {l:'OPTIONS CAD', v:T.optCAD}, {l:'OPTIONS US', v:T.optUS},
+      {l:'TOTAL RÉALISÉ', v:T.tot},
+    ];
+    resume.innerHTML = cards.map(c => {
+      const n = Math.round(c.v);
+      return '<div class="kpi" style="flex:1;min-width:130px;max-width:210px">'
+        + '<div class="kpi-l">'+c.l+'</div>'
+        + '<div class="kpi-v" style="font-size:16px;color:'+col(n)+'">'+(n>=0?'+':'')+fi(n)+'$ CAD</div>'
+      + '</div>';
+    }).join('');
+  }
 }
 
 function renderPnlActRealized() {
