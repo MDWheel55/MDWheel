@@ -337,8 +337,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
 
   <!-- ══ 2. ÉTAT DU LIVRE (RISQUE) ══ -->
   <div class="sec">État du livre &middot; limites, exposition et delta-équivalent</div>
-  <div class="pil-wrap" style="margin-bottom:10px"><table class="pil-tbl" id="pil-gauges"></table></div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:1.5rem" id="pil-expo-kpi"></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-top-kpi"></div>
+  <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-gauges"></table></div>
 
   <!-- ══ 3. EXPOSITION PAR SOUS-JACENT ══ -->
   <div class="sec">Facteur de risque &middot; exposition par sous-jacent</div>
@@ -5164,14 +5164,26 @@ function renderPilotage(){
   var stG   = pilotStress(L, m, -15, 15);   // choc −15 % / IV +15 → delta stressé = indicateur de risque CENTRAL
   var stG30 = pilotStress(L, m, -30, 15);   // choc −30 % (scénario sévère)
   var stG45 = pilotStress(L, m, -45, 15);   // choc −45 % (scénario extrême)
+  var convT = Math.abs(a.deltaEq)>0 ? Math.abs(stG.deltaAp)/Math.abs(a.deltaEq) : 0;
   var gj=[
     {l:'Delta stressé (−15%)', cur:Math.abs(stG.deltaAp),   base:avoir, bl:'avoir', v:avoir>0?Math.abs(stG.deltaAp)/avoir*100:0,   cap:100},
     {l:'Delta stressé (−30%)', cur:Math.abs(stG30.deltaAp), base:avoir, bl:'avoir', v:avoir>0?Math.abs(stG30.deltaAp)/avoir*100:0, cap:100},
-    {l:'Delta stressé (−45%)', cur:Math.abs(stG45.deltaAp), base:avoir, bl:'avoir', v:avoir>0?Math.abs(stG45.deltaAp)/avoir*100:0, cap:100},
-    {l:'Marge utilisée', cur:m.margeReq,          base:brute, bl:'brute', v:brute>0?m.margeReq/brute*100:0,          cap:s.mx},
-    {l:'Delta-équiv',    cur:Math.abs(a.deltaEq), base:avoir, bl:'avoir', v:avoir>0?Math.abs(a.deltaEq)/avoir*100:0, cap:s.dx*100},
-    {l:'Notionnel brut', cur:notTot,              base:brute, bl:'brute', v:brute>0?notTot/brute*100:0,              cap:s.nx*100}
+    {l:'Delta stressé (−45%)', cur:Math.abs(stG45.deltaAp), base:avoir, bl:'avoir', v:avoir>0?Math.abs(stG45.deltaAp)/avoir*100:0, cap:100}
   ];
+  // Boîtes du haut : Marge utilisée · Delta-équiv · Notionnel brut
+  var topb=[
+    {l:'Marge utilisée', v:'$'+fi(Math.round(m.margeReq)),      r:(brute>0?m.margeReq/brute*100:0),          cap:s.mx,     s:'$'+fi(Math.round(brute))+' brute'},
+    {l:'Delta-équiv',    v:'$'+fi(Math.round(Math.abs(a.deltaEq))), r:(avoir>0?Math.abs(a.deltaEq)/avoir*100:0), cap:s.dx*100, s:'de l\'avoir'},
+    {l:'Notionnel brut', v:'$'+fi(Math.round(notTot)),          r:(brute>0?notTot/brute*100:0),              cap:s.nx*100, s:'$'+fi(Math.round(brute))+' brute'}
+  ];
+  document.getElementById('pil-top-kpi').innerHTML = topb.map(function(i){
+    var ratio=i.cap>0?i.r/i.cap:0;
+    var c=ratio>=1?'var(--red)':ratio>=0.8?'var(--amber)':'var(--green)';
+    return '<div class="pil-kpi"><div class="pil-kpi-l">'+i.l+'</div>'
+      +'<div class="pil-kpi-v" style="color:'+c+'">'+i.v+'</div>'
+      +'<div class="pil-kpi-s">'+i.r.toFixed(0)+'% &middot; plafond '+i.cap.toFixed(0)+'% &middot; '+i.s+'</div></div>';
+  }).join('');
+
   document.getElementById('pil-gauges').innerHTML =
     '<thead><tr><th>Limite</th><th class="pil-num">Utilisé</th><th class="pil-num">Total</th>'
     +'<th class="pil-num">= %</th><th class="pil-num">Plafond</th></tr></thead><tbody>'
@@ -5185,7 +5197,14 @@ function renderPilotage(){
           +'<td class="pil-num" style="color:'+c+'">'+x.v.toFixed(0)+'%</td>'
           +'<td class="pil-num" style="color:var(--muted);font-weight:400">'+x.cap.toFixed(0)+'%</td>'
           +'</tr>';
-      }).join('')+'</tbody>';
+      }).join('')
+    + '<tr><td style="color:var(--text)">Facteur de convexité</td>'
+      +'<td class="pil-num" style="color:'+(convT>3?'var(--red)':convT>2.2?'var(--amber)':'var(--green)')+'">'+convT.toFixed(2)+'×</td>'
+      +'<td colspan="3" style="color:var(--muted);font-weight:400">'+(convT>3?'livre chargé en gamma':convT>2.2?'équilibré court/long':'dominé par le long')+'</td></tr>'
+    + '<tr><td style="color:var(--text)">Vega du livre</td>'
+      +'<td class="pil-num">$'+fi(Math.round(Math.abs(a.vega)))+' /pt</td>'
+      +'<td colspan="3" style="color:var(--muted);font-weight:400">IV +10 pts &rarr; '+(a.vega<0?'−':'+')+'$'+fi(Math.round(Math.abs(a.vega)*10))+'</td></tr>'
+    +'</tbody>';
 
   // ── IV / Volatilité par sous-jacent : quand ouvrir (prime riche) ──
   // Indices de vol live : VXN→QQQ, VIX→SPY, GVZ→GLD. XEG : pas d'indice → IV
@@ -5222,28 +5241,8 @@ function renderPilotage(){
           +'</tr>';
       }).join('')+'</tbody>';
 
-  // ── 2. EXPOSITION ────────────────────────────────────────
-  var st = pilotStress(L, m, -15, 15);
-  var conv = Math.abs(a.deltaEq)>0 ? Math.abs(st.deltaAp)/Math.abs(a.deltaEq) : 0;
-  var kp=[
-    {l:'Delta-équiv (stressé)', v:'$'+fi(Math.round(Math.abs(st.deltaAp))),
-     s:(avoir>0?(Math.abs(st.deltaAp)/avoir).toFixed(2):'—')+'× l\'avoir · −15 % / IV +15',
-     c:'var(--amber)'},
-    {l:'Facteur de convexité', v:conv.toFixed(2)+'×',
-     s:conv>3?'livre chargé en gamma':conv>2.2?'équilibré court/long':'dominé par le long',
-     c:conv>3?'var(--red)':conv>2.2?'var(--amber)':'var(--green)'},
-    {l:'Vega du livre', v:'$'+fi(Math.round(Math.abs(a.vega)))+' /pt',
-     s:'IV +10 pts → '+(a.vega<0?'−':'+')+'$'+fi(Math.round(Math.abs(a.vega)*10)),
-     c:'var(--muted)'},
-    {l:'Thêta du livre', v:(a.theta>=0?'+':'')+'$'+fi(Math.round(a.theta))+' /j',
-     s:'~$'+fi(Math.round(a.theta*30))+' /mois · $'+fi(Math.round(a.theta*30*fx))+' CAD',
-     c:a.theta>=0?'var(--green)':'var(--red)'}
-  ];
-  document.getElementById('pil-expo-kpi').innerHTML = kp.map(function(i){
-    return '<div class="pil-kpi"><div class="pil-kpi-l">'+i.l+'</div>'
-      +'<div class="pil-kpi-v" style="color:'+i.c+'">'+i.v+'</div>'
-      +'<div class="pil-kpi-s">'+i.s+'</div></div>';
-  }).join('');
+  // (Exposition : Delta-équiv → boîtes du haut ; Convexité + Vega → lignes du tableau ;
+  //  Thêta → déjà dans la section « Revenu par tranche ». Rangée de boîtes du bas retirée.)
 
   // ── Revenu par tranche de tenor ──────────────────────────
   // Chaque position tombe dans un bucket de DTE. Le thêta de chaque bucket
@@ -5284,10 +5283,11 @@ function renderPilotage(){
 
   document.getElementById('pil-rev-kpi').innerHTML = [
     {l:'Réel /mois', v:'$'+fi(Math.round(revMois)),
-     s:'prime réelle du livre · '+(TT.ve>0?(TT.jourM*365/TT.ve*100).toFixed(0):'0')+'%/an sur marge', c:'var(--green)'},
+     s:'prime réelle du livre', c:'var(--green)'},
+    {l:'Rendement %/an', v:(TT.ve>0?(TT.jourM*365/TT.ve*100).toFixed(0):'0')+'%',
+     s:'du livre · sur marge déployée', c:'var(--green)'},
     {l:'Potentiel réaliste /mois', v:'$'+fi(Math.round(potMois)),
      s:rdtC.toFixed(0)+'%/an × $'+fi(Math.round(mDep))+' marge déployée', c:'var(--qqq)'},
-    {l:'Objectif mensuel', v:'$'+fi(OBJ), s:'cible · éditable', c:'var(--muted)'},
     {l:(ecart>0?'Écart à combler':'Objectif atteint'),
      v:(ecart>0?'$'+fi(Math.round(ecart)):'✓ +$'+fi(Math.round(-ecart))),
      s:pctObj.toFixed(0)+'% de l\'objectif', c:ecart>0?'var(--red)':'var(--green)'},
