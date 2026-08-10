@@ -796,6 +796,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
         <option value="CBIL">CBIL — GLB X 0-3M T-BILL (CAD)</option>
         <option value="VEQT">VEQT — Vanguard All-EQ (CAD)</option>
         <option value="XEG">XEG — iShares S&P/TSX Énergie (CAD)</option>
+        <option value="XUI">XUI — iShares (CAD)</option>
+        <option value="XEC">XEC — iShares Marchés émergents (CAD)</option>
+        <option value="XEF">XEF — iShares EAEO / EAFE (CAD)</option>
         <option value="GLD">GLD — SPDR Gold Trust (USD)</option>
         <option value="IBIT">IBIT — iShares Bitcoin Trust (USD)</option>
         <option value="SPYM">SPYM — SPDR S&P 500 (USD)</option>
@@ -881,7 +884,8 @@ function fxValide(brut, defaut) {
 // (protège contre l'auto-conversion de Sheets, ex. un prix devenu "2026").
 var PRIX_PLAGE = {
   QQQ:[200,1200], SPY:[300,1200], GLD:[150,800], NVDA:[50,500],
-  VEQT:[30,120], XEG:[10,60], SPYM:[40,200], CBIL:[40,60], UBIL:[40,60], IBIT:[10,120]
+  VEQT:[30,120], XEG:[10,60], SPYM:[40,200], CBIL:[40,60], UBIL:[40,60], IBIT:[10,120],
+  XUI:[15,120], XEC:[15,80], XEF:[15,120]
 };
 function prixValide(sym, brut, defaut) {
   var r = parseFloat(brut);
@@ -2687,7 +2691,7 @@ function autoStockDevise() {
   // Devise de RÈGLEMENT par symbole (validé contre Disnat).
   // Note : UBIL se négocie sur marché canadien mais se RÈGLE en USD.
   const devParSymbole = {
-    CBIL:'CAD', VEQT:'CAD', XEG:'CAD',
+    CBIL:'CAD', VEQT:'CAD', XEG:'CAD', XUI:'CAD', XEC:'CAD', XEF:'CAD',
     GLD:'USD', IBIT:'USD', SPYM:'USD', UBIL:'USD'
   };
   const sym = symKey(document.getElementById('f-stk-sym').value || '');
@@ -3630,7 +3634,7 @@ function devTradeAction(t) {
   const d = String(t.devise||'').toUpperCase();
   if (d === 'CAD' || d === 'USD') return d;
   const sym = String(t.symbole||'').toUpperCase();
-  return /^(CBIL|VEQT|XEG)/.test(sym) ? 'CAD' : 'USD';
+  return /^(CBIL|VEQT|XEG|XUI|XEC|XEF)/.test(sym) ? 'CAD' : 'USD';
 }
 
 // FX du jour du trade : cache historique en priorité, repli taux du jour (marqué approx)
@@ -4660,7 +4664,7 @@ var STK_CLASSES = [
   {f:'Énergie',          tickers:['XEG'],   col:'var(--amber)'},
   {f:'Bitcoin',          tickers:['IBIT'],  col:'var(--blue)'}
 ];
-var STK_CAD = {VEQT:1, XEG:1, CBIL:1};   // titres réglés en CAD
+var STK_CAD = {VEQT:1, XEG:1, CBIL:1, XUI:1, XEC:1, XEF:1};   // titres réglés en CAD
 
 // Composition de VEQT (source : Vanguard / TradingView). Modifiable
 // dans Paramètres — Vanguard rééquilibre, donc ça dérive lentement.
