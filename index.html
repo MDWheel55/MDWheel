@@ -242,9 +242,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <tr><td style="color:var(--muted)">Longue</td><td><select class="pil-inp w" id="pil-tk3" onchange="renderPilotage()" style="text-align:left"><option>SPY</option><option>QQQ</option><option>GLD</option><option>XEG</option></select></td><td><input class="pil-inp" id="pil-k3" type="number" step="1" value="620" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-d3" type="number" step="1" value="513" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-v3" type="number" step="0.1" value="24.9" onchange="renderPilotage()"></td><td><input class="pil-inp" id="pil-q3" type="number" step="1" min="0" value="1" onchange="renderPilotage()" style="width:46px"></td><td class="pil-num" id="pil-o3d">—</td><td class="pil-num" id="pil-o3p">—</td><td class="pil-num" id="pil-o3m">—</td><td class="pil-num" id="pil-o3n">—</td></tr>
     </tbody><tfoot id="pil-legs-tot"></tfoot></table>
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-      <label>Plafonds &mdash; marge %</label><input class="pil-inp" id="pil-mx" type="number" step="1" value="50" onchange="renderPilotage()">
-      <label>&Delta;/avoir</label><input class="pil-inp" id="pil-dx" type="number" step="0.05" value="0.50" onchange="renderPilotage()">
-      <label>Not./brute</label><input class="pil-inp" id="pil-nx" type="number" step="0.1" value="3.0" onchange="renderPilotage()">
+      <label>Plafonds &mdash; marge %</label><input class="pil-inp" id="pil-mx" type="number" step="1" value="60" onchange="renderPilotage()">
+      <label>&Delta;/avoir</label><input class="pil-inp" id="pil-dx" type="number" step="0.05" value="0.60" onchange="renderPilotage()">
+      <label>Not./brute</label><input class="pil-inp" id="pil-nx" type="number" step="0.1" value="3.5" onchange="renderPilotage()">
       <label>&le;90j %</label><input class="pil-inp" id="pil-t90" type="number" step="1" value="35" onchange="renderPilotage()">
       <label>1 échéance %</label><input class="pil-inp" id="pil-ex" type="number" step="1" value="20" onchange="renderPilotage()">
     </div>
@@ -4482,6 +4482,16 @@ function recalcCompte() {
   var valGLD=qGLD*pGLD;
   // Valeur IBIT
   var valIBIT = acctQty.IBIT * (mkt.IBIT||34.85);
+  // Autres FNB réglés en CAD (XUI/XEC/XEF + tout futur ticker CAD), hors VEQT/XEG
+  // déjà comptés et hors T-bills CBIL/UBIL. Prix live si dispo, sinon coût moyen.
+  var _dejaCAD = {VEQT:1, XEG:1, CBIL:1, UBIL:1};
+  var valAutresCAD = 0;
+  Object.keys(acctQty).forEach(function(tk){
+    if (_dejaCAD[tk] || !STK_CAD[tk]) return;
+    var q = parseFloat(acctQty[tk])||0;
+    var p = parseFloat(mkt[tk]) || parseFloat(acctCost[tk]) || 0;
+    valAutresCAD += q*p/fx2;   // en USD
+  });
   // Valeur au marché des options : short = passif négatif, long = actif positif.
   // C'est la convention Disnat (valeur des titres = actions NET des options vendues),
   // distincte du P&L flottant. Σ signe × contrats × prixActuel × 100.
@@ -4498,7 +4508,7 @@ function recalcCompte() {
   });
   // Valeur totale des options, exprimée en USD (le bloc CAD passe par le taux)
   var valOpts = valOptsUSD + valOptsCAD/fx2;
-  var total = valV+valX+valS+valC+valU+valGLD+valIBIT+valOpts+cashU2+cashC2/fx2;
+  var total = valV+valX+valS+valC+valU+valGLD+valIBIT+valAutresCAD+valOpts+cashU2+cashC2/fx2;
   var totalCAD = total * fx2;
   // Exposer pour maybeSnapshot (même valeur que les KPIs)
   window._lastTotalUSD = Math.round(total);
@@ -4533,7 +4543,7 @@ function recalcCompte() {
   // ═══ CARTES SYNTHÈSE — 4 sections ═══
   // Valeurs ventilées (toutes en USD ; ×fx2 pour l'affichage CAD)
   var valActUS  = valS + valGLD + valIBIT;   // actions réglées USD : SPYM, GLD, IBIT
-  var valActCAD = valV + valX;               // actions réglées CAD : VEQT, XEG
+  var valActCAD = valV + valX + valAutresCAD; // actions réglées CAD : VEQT, XEG + FNB CAD (XUI/XEC/XEF…)
   // P&L actions HORS T-bills, par devise native (source : renderActionsTable)
   var pnlStkCADn = window._pnlStkCADn || 0;  // VEQT, XEG (CAD)
   var pnlStkUSDn = window._pnlStkUSDn || 0;  // SPYM, GLD, IBIT (USD)
@@ -4581,7 +4591,7 @@ function recalcCompte() {
   // SECTION 2 — Actions (avec P&L, devise native) + part du portefeuille
   var actEl = document.getElementById('compte-actions');
   if(actEl) actEl.innerHTML = [
-    {l:'ACTIONS CAD', v:'$'+fi(Math.round(valActCAD*fx2))+' CAD', s:'VEQT · XEG · ~$'+fi(Math.round(valActCAD))+' USD',        c:'', pnl:pnlStkCADn, pnlDev:'CAD'},
+    {l:'ACTIONS CAD', v:'$'+fi(Math.round(valActCAD*fx2))+' CAD', s:'VEQT · XEG · XUI/XEC/XEF · ~$'+fi(Math.round(valActCAD))+' USD', c:'', pnl:pnlStkCADn, pnlDev:'CAD'},
     {l:'ACTIONS US',  v:'$'+fi(Math.round(valActUS*fx2))+' CAD',  s:'SPYM · GLD · IBIT · ~$'+fi(Math.round(valActUS))+' USD', c:'', pnl:pnlStkUSDn, pnlDev:'USD'},
   ].map(mkCard).join('') + mkPct(pctOf(actValCAD), 'var(--green)', '$'+fi(Math.round(actValCAD))+' CAD total');
 
@@ -5053,7 +5063,7 @@ function ivRank(hist, field, val, seedLo, seedHi){
 
 function pilotSeuils(){
   var g=function(id,d){ var e=document.getElementById(id); var v=e?parseFloat(e.value):NaN; return isNaN(v)?d:v; };
-  return {mx:g('pil-mx',50), dx:g('pil-dx',0.50), nx:g('pil-nx',3.0), t90:g('pil-t90',35), ex:g('pil-ex',20)};
+  return {mx:g('pil-mx',60), dx:g('pil-dx',0.60), nx:g('pil-nx',3.5), t90:g('pil-t90',35), ex:g('pil-ex',20)};
 }
 
 // ═══ RENDU ═══
