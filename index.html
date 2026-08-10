@@ -796,7 +796,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
         <option value="CBIL">CBIL — GLB X 0-3M T-BILL (CAD)</option>
         <option value="VEQT">VEQT — Vanguard All-EQ (CAD)</option>
         <option value="XEG">XEG — iShares S&P/TSX Énergie (CAD)</option>
-        <option value="XUI">XUI — iShares (CAD)</option>
+        <option value="XIU">XIU — iShares S&P/TSX 60 (CAD)</option>
         <option value="XEC">XEC — iShares Marchés émergents (CAD)</option>
         <option value="XEF">XEF — iShares EAEO / EAFE (CAD)</option>
         <option value="GLD">GLD — SPDR Gold Trust (USD)</option>
@@ -885,7 +885,7 @@ function fxValide(brut, defaut) {
 var PRIX_PLAGE = {
   QQQ:[200,1200], SPY:[300,1200], GLD:[150,800], NVDA:[50,500],
   VEQT:[30,120], XEG:[10,60], SPYM:[40,200], CBIL:[40,60], UBIL:[40,60], IBIT:[10,120],
-  XUI:[15,120], XEC:[15,80], XEF:[15,120]
+  XIU:[15,120], XUI:[15,120], XEC:[15,80], XEF:[15,120]
 };
 function prixValide(sym, brut, defaut) {
   var r = parseFloat(brut);
@@ -2701,7 +2701,7 @@ function autoStockDevise() {
   // Devise de RÈGLEMENT par symbole (validé contre Disnat).
   // Note : UBIL se négocie sur marché canadien mais se RÈGLE en USD.
   const devParSymbole = {
-    CBIL:'CAD', VEQT:'CAD', XEG:'CAD', XUI:'CAD', XEC:'CAD', XEF:'CAD',
+    CBIL:'CAD', VEQT:'CAD', XEG:'CAD', XIU:'CAD', XUI:'CAD', XEC:'CAD', XEF:'CAD',
     GLD:'USD', IBIT:'USD', SPYM:'USD', UBIL:'USD'
   };
   const sym = symKey(document.getElementById('f-stk-sym').value || '');
@@ -3644,7 +3644,7 @@ function devTradeAction(t) {
   const d = String(t.devise||'').toUpperCase();
   if (d === 'CAD' || d === 'USD') return d;
   const sym = String(t.symbole||'').toUpperCase();
-  return /^(CBIL|VEQT|XEG|XUI|XEC|XEF)/.test(sym) ? 'CAD' : 'USD';
+  return /^(CBIL|VEQT|XEG|XIU|XUI|XEC|XEF)/.test(sym) ? 'CAD' : 'USD';
 }
 
 // FX du jour du trade : cache historique en priorité, repli taux du jour (marqué approx)
@@ -4591,7 +4591,7 @@ function recalcCompte() {
   // SECTION 2 — Actions (avec P&L, devise native) + part du portefeuille
   var actEl = document.getElementById('compte-actions');
   if(actEl) actEl.innerHTML = [
-    {l:'ACTIONS CAD', v:'$'+fi(Math.round(valActCAD*fx2))+' CAD', s:'VEQT · XEG · XUI/XEC/XEF · ~$'+fi(Math.round(valActCAD))+' USD', c:'', pnl:pnlStkCADn, pnlDev:'CAD'},
+    {l:'ACTIONS CAD', v:'$'+fi(Math.round(valActCAD*fx2))+' CAD', s:'VEQT · XEG · XIU/XEC/XEF · ~$'+fi(Math.round(valActCAD))+' USD', c:'', pnl:pnlStkCADn, pnlDev:'CAD'},
     {l:'ACTIONS US',  v:'$'+fi(Math.round(valActUS*fx2))+' CAD',  s:'SPYM · GLD · IBIT · ~$'+fi(Math.round(valActUS))+' USD', c:'', pnl:pnlStkUSDn, pnlDev:'USD'},
   ].map(mkCard).join('') + mkPct(pctOf(actValCAD), 'var(--green)', '$'+fi(Math.round(actValCAD))+' CAD total');
 
@@ -4617,7 +4617,7 @@ function recalcCompte() {
   var revPuts=Math.round((function(){ try{ var LL=pilotPositions(),ss=0; LL.forEach(function(o){ if(o.ve>0) ss+=o.jour; }); return ss*30.44; }catch(e){ return 0; } })());  // USD
   var cbilCAD=Math.round(qC*pC*0.036/12);                        // intérêt CBIL-C, natif CAD
   var revUBIL=Math.round(qU*pU*0.039/12);                        // intérêt UBIL.U-C, natif USD
-  var revDiv =Math.round((qV*0.76/fx2+qX*0.71/fx2+qS*0.88+(acctQty.XUI||0)*0.50/fx2+(acctQty.XEC||0)*0.80/fx2+(acctQty.XEF||0)*1.10/fx2)/12);  // dividendes, converti USD
+  var revDiv =Math.round((qV*0.76/fx2+qX*0.70/fx2+qS*0.94+((acctQty.XIU||0)+(acctQty.XUI||0))*1.09/fx2+(acctQty.XEC||0)*0.70/fx2+(acctQty.XEF||0)*1.20/fx2)/12);  // dividendes, converti USD
   var totalUSD=revPuts+revUBIL+revDiv+Math.round(cbilCAD/fx2);   // total passif en USD
   var totalCAD=Math.round(totalUSD*fx2);                          // même total, en CAD
   var OBJc=(function(){ var e=document.getElementById('c-obj'); var v=e?parseFloat(e.value):NaN; return (isNaN(v)||v<=0)?5000:v; })();  // objectif passif propre au Compte (USD, éditable)
@@ -4647,7 +4647,7 @@ function recalcCompte() {
       {l:'Options (réel)',     v:'$'+fi(revPuts)+' USD',   s:'prime réelle · pilotage'},
       {l:'CBIL-C (3.6%)',      v:'$'+fi(cbilCAD)+' CAD',   s:fi(qC)+' u · natif CAD'},
       {l:'UBIL.U-C (3.9%)',    v:'$'+fi(revUBIL)+' USD',   s:fi(qU)+' u · natif USD'},
-      {l:'Dividendes',         v:'$'+fi(revDiv)+' USD',    s:'VEQT·XEG·SPYM·XUI·XEC·XEF'},
+      {l:'Dividendes',         v:'$'+fi(revDiv)+' USD',    s:'VEQT·XEG·SPYM·XIU·XEC·XEF'},
       {l:'Total passif (USD)', v:'~$'+fi(totalUSD)+' USD', s:'référence'},
     ];
     var detHtml='<div style="display:flex;gap:6px;flex-wrap:wrap">'+det.map(function(i){
@@ -4684,7 +4684,7 @@ var STK_CLASSES = [
   {f:'Énergie',          tickers:['XEG'],   col:'var(--amber)'},
   {f:'Bitcoin',          tickers:['IBIT'],  col:'var(--blue)'}
 ];
-var STK_CAD = {VEQT:1, XEG:1, CBIL:1, XUI:1, XEC:1, XEF:1};   // titres réglés en CAD
+var STK_CAD = {VEQT:1, XEG:1, CBIL:1, XIU:1, XUI:1, XEC:1, XEF:1};   // titres réglés en CAD
 
 // Composition de VEQT (source : Vanguard / TradingView). Modifiable
 // dans Paramètres — Vanguard rééquilibre, donc ça dérive lentement.
