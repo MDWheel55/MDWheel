@@ -897,12 +897,22 @@ function prixValide(sym, brut, defaut) {
 
 // Alimente acctQty et acctCost à partir de actionsData (Sheets = source de vérité)
 function syncAcctFromActions() {
+  // Agrège par symbole normalisé (UBIL, UBIL.U, UBIL.U-C -> UBIL) et SOMME les
+  // quantités. Si une position vit sur deux lignes (état initial sous « UBIL.U »
+  // + nouvel achat sous « UBIL »), elles FUSIONNENT au lieu de s'écraser.
+  const agg = {};
   actionsData.forEach(a => {
     const key = symKey(a.symbole);
-    if (key) {
-      acctQty[key] = a.quantite;
-      acctCost[key] = a.coutMoyen;
-    }
+    if (!key) return;
+    const q = parseFloat(a.quantite) || 0;
+    const c = parseFloat(a.coutMoyen) || 0;
+    if (!agg[key]) agg[key] = { q: 0, coutPondere: 0 };
+    agg[key].q += q;
+    agg[key].coutPondere += c * q;
+  });
+  Object.keys(agg).forEach(key => {
+    acctQty[key] = agg[key].q;
+    acctCost[key] = agg[key].q > 0 ? agg[key].coutPondere / agg[key].q : acctCost[key];
   });
 }
 // Prix marché actuels (Disnat 9 juin 2026)
