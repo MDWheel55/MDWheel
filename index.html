@@ -1456,12 +1456,16 @@ async function actualiserTout() {
       } catch(e) {}
     }
     // TSX (cotés à Toronto) via Yahoo — IBIT et SPYM sont passés sur MarketData ci-dessus.
-    const [veqtY,xegY,ubilY] = await Promise.allSettled([
-      yahooQuote('VEQT.TO'), yahooQuote('XEG.TO'), yahooQuote('UBIL')
+    const [veqtY,xegY,ubilY,xiuY,xecY,xefY] = await Promise.allSettled([
+      yahooQuote('VEQT.TO'), yahooQuote('XEG.TO'), yahooQuote('UBIL'),
+      yahooQuote('XIU.TO'), yahooQuote('XEC.TO'), yahooQuote('XEF.TO')
     ]);
     if(veqtY.status==='fulfilled'&&veqtY.value.c>0) mkt.VEQT=prixValide('VEQT',veqtY.value.c,mkt.VEQT);
     if(xegY.status==='fulfilled'&&xegY.value.c>0)   mkt.XEG=prixValide('XEG',xegY.value.c,mkt.XEG);
     if(ubilY.status==='fulfilled'&&ubilY.value.c>0)  mkt.UBIL=prixValide('UBIL',ubilY.value.c,mkt.UBIL);
+    if(xiuY.status==='fulfilled'&&xiuY.value.c>0)   mkt.XIU=prixValide('XIU',xiuY.value.c,mkt.XIU);
+    if(xecY.status==='fulfilled'&&xecY.value.c>0)   mkt.XEC=prixValide('XEC',xecY.value.c,mkt.XEC);
+    if(xefY.status==='fulfilled'&&xefY.value.c>0)   mkt.XEF=prixValide('XEF',xefY.value.c,mkt.XEF);
     steps.marche = true;
   } catch(e) {
     setStatus('⚠ Prix marché — échec', 'var(--red)');
@@ -4692,7 +4696,8 @@ var VEQT_MIX = {us:42.98, ca:31.38, intl:18.44, em:7.20};
 var STK_VUE  = 'lookthrough';            // 'titre' | 'lookthrough'
 
 function stkValeurUSD(tk){
-  var q = parseFloat(acctQty[tk])||0, p = parseFloat(mkt[tk])||0;
+  var q = parseFloat(acctQty[tk])||0;
+  var p = parseFloat(mkt[tk]) || parseFloat(acctCost[tk]) || 0;  // repli coût moyen si prix pas encore chargé
   var fx = mkt.USDCAD||1.41;
   var v = q*p;
   return STK_CAD[tk] ? v/fx : v;
@@ -4747,12 +4752,12 @@ function renderActionsFacteurs(){
     rows = [
       {f:'Actions US', col:'var(--spy)', val: stkValeurUSD('SPYM') + V*VEQT_MIX.us,
        src:'SPYM + VEQT '+(VEQT_MIX.us*100).toFixed(1)+'%'},
-      {f:'Actions Canada', col:'var(--red)', val: stkValeurUSD('XEG') + V*VEQT_MIX.ca,
-       src:'XEG (énergie) + VEQT '+(VEQT_MIX.ca*100).toFixed(1)+'%'},
-      {f:'International développé', col:'var(--qqq)', val: V*VEQT_MIX.intl,
-       src:'VEQT '+(VEQT_MIX.intl*100).toFixed(1)+'%'},
-      {f:'Marchés émergents', col:'var(--green)', val: V*VEQT_MIX.em,
-       src:'VEQT '+(VEQT_MIX.em*100).toFixed(1)+'%'},
+      {f:'Actions Canada', col:'var(--red)', val: stkValeurUSD('XEG') + stkValeurUSD('XIU') + V*VEQT_MIX.ca,
+       src:'XEG + XIU + VEQT '+(VEQT_MIX.ca*100).toFixed(1)+'%'},
+      {f:'International développé', col:'var(--qqq)', val: stkValeurUSD('XEF') + V*VEQT_MIX.intl,
+       src:'XEF + VEQT '+(VEQT_MIX.intl*100).toFixed(1)+'%'},
+      {f:'Marchés émergents', col:'var(--green)', val: stkValeurUSD('XEC') + V*VEQT_MIX.em,
+       src:'XEC + VEQT '+(VEQT_MIX.em*100).toFixed(1)+'%'},
       {f:'Or', col:'var(--gld)', val: stkValeurUSD('GLD'), src:'GLD'},
       {f:'Bitcoin', col:'var(--blue)', val: stkValeurUSD('IBIT'), src:'IBIT'}
     ];
