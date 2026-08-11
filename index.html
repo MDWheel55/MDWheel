@@ -1460,7 +1460,13 @@ async function actualiserTout() {
     // en rafale (Promise.all) Yahoo throttle et renvoie du vide sur certains
     // symboles .TO (ex. XEF/XIU restaient au coût moyen). Un à la fois + retry.
     const tsxQuote = async (ySym) => {
-      for (let a=0; a<3; a++) {
+      // 1) Backend serveur (UrlFetchApp -> Yahoo direct) : fiable, pas de throttle proxy.
+      try {
+        const r = await gsApi({action:'getTsxPrice', symbol:ySym});
+        const px = parseFloat(r && r.price); if (isFinite(px) && px > 0) return px;
+      } catch(e) {}
+      // 2) Repli navigateur (yahooQuote via proxy public) avec quelques relances.
+      for (let a=0; a<2; a++) {
         try { const y = await yahooQuote(ySym); if (y && y.c > 0) return y.c; } catch(e) {}
         await dl(250);
       }
