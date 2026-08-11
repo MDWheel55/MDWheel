@@ -1456,16 +1456,23 @@ async function actualiserTout() {
       } catch(e) {}
     }
     // TSX (cotés à Toronto) via Yahoo — IBIT et SPYM sont passés sur MarketData ci-dessus.
-    const [veqtY,xegY,ubilY,xiuY,xecY,xefY] = await Promise.allSettled([
-      yahooQuote('VEQT.TO'), yahooQuote('XEG.TO'), yahooQuote('UBIL'),
-      yahooQuote('XIU.TO'), yahooQuote('XEC.TO'), yahooQuote('XEF.TO')
-    ]);
-    if(veqtY.status==='fulfilled'&&veqtY.value.c>0) mkt.VEQT=prixValide('VEQT',veqtY.value.c,mkt.VEQT);
-    if(xegY.status==='fulfilled'&&xegY.value.c>0)   mkt.XEG=prixValide('XEG',xegY.value.c,mkt.XEG);
-    if(ubilY.status==='fulfilled'&&ubilY.value.c>0)  mkt.UBIL=prixValide('UBIL',ubilY.value.c,mkt.UBIL);
-    if(xiuY.status==='fulfilled'&&xiuY.value.c>0)   mkt.XIU=prixValide('XIU',xiuY.value.c,mkt.XIU);
-    if(xecY.status==='fulfilled'&&xecY.value.c>0)   mkt.XEC=prixValide('XEC',xecY.value.c,mkt.XEC);
-    if(xefY.status==='fulfilled'&&xefY.value.c>0)   mkt.XEF=prixValide('XEF',xefY.value.c,mkt.XEF);
+    // TSX (cotés à Toronto) via Yahoo. Récupération SÉQUENTIELLE + relance :
+    // en rafale (Promise.all) Yahoo throttle et renvoie du vide sur certains
+    // symboles .TO (ex. XEF/XIU restaient au coût moyen). Un à la fois + retry.
+    const tsxQuote = async (ySym) => {
+      for (let a=0; a<3; a++) {
+        try { const y = await yahooQuote(ySym); if (y && y.c > 0) return y.c; } catch(e) {}
+        await dl(250);
+      }
+      return 0;
+    };
+    const tsxList = [['VEQT','VEQT.TO'],['XEG','XEG.TO'],['UBIL','UBIL'],
+                     ['XIU','XIU.TO'],['XEC','XEC.TO'],['XEF','XEF.TO']];
+    for (const [key,ySym] of tsxList) {
+      const px = await tsxQuote(ySym);
+      if (px > 0) mkt[key] = prixValide(key, px, mkt[key]);
+      await dl(120);
+    }
     steps.marche = true;
   } catch(e) {
     setStatus('⚠ Prix marché — échec', 'var(--red)');
