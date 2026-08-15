@@ -4643,12 +4643,19 @@ function recalcCompte() {
   var revEl=document.getElementById('revenu-kpis');
   if(revEl){
     // ── Priorité : Total passif (CAD) + Objectif atteint (en gros) ──
+    // Revenu passif HORS options : CBIL + UBIL + dividendes, en CAD (quasi-garanti)
+    var fixeDivCAD = cbilCAD + Math.round(revUBIL*fx2) + Math.round(revDiv*fx2);
     var hero =
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
         '<div class="kpi" style="flex:2;min-width:230px">'+
           '<div class="kpi-l">TOTAL PASSIF (CAD)</div>'+
           '<div class="kpi-v g" style="font-size:26px">~$'+fi(totalCAD)+' CAD</div>'+
           '<div class="kpi-s">~$'+fi(totalUSD)+' USD · options réelles + revenu fixe · ≈ USD × '+fx2.toFixed(3)+'</div>'+
+        '</div>'+
+        '<div class="kpi" style="flex:1.4;min-width:200px">'+
+          '<div class="kpi-l">FIXE + DIVIDENDES (CAD)</div>'+
+          '<div class="kpi-v" style="font-size:26px;color:var(--blue)">~$'+fi(fixeDivCAD)+' CAD</div>'+
+          '<div class="kpi-s">CBIL + UBIL + dividendes · hors options</div>'+
         '</div>'+
         '<div class="kpi" style="flex:1;min-width:190px">'+
           '<div class="kpi-l">OBJECTIF ATTEINT</div>'+
@@ -5092,7 +5099,14 @@ function renderPilotage(){
   catch(e){ return; }
 
   var fx    = m.fx || 1.41;
-  var brute = m.margeReq + m.margeUSD;          // capacité brute Disnat (USD)
+  var brute = m.margeReq + m.margeUSD;          // capacité brute Disnat (USD) — CBIL/UBIL à 70% (VE d'emprunt)
+  // Vue « cash réel » : CBIL + UBIL sont des quasi-liquidités retirables à 100 %.
+  // On rajoute à la brute la portion NON prêtée (les 30 % que Disnat n'escompte pas),
+  // ce qui donne le VRAI % de marge utilisée (dénominateur plus grand -> % plus bas).
+  var _tC = parseFloat(gv('c-cbil','70'))/100, _tU = parseFloat(gv('c-ubil','70'))/100;
+  var _pC = mkt.CBIL||50.01, _pU = mkt.UBIL||50.02;
+  var bonusBIL = (acctQty.CBIL||0)*_pC*(1-_tC)/fx + (acctQty.UBIL||0)*_pU*(1-_tU); // USD
+  var brute100 = brute + bonusBIL;              // capacité brute avec CBIL/UBIL à 100 %
   var avoir = window._lastTotalUSD || 0;
   var s     = pilotSeuils();
   var PN    = pilotPanier();
@@ -5212,13 +5226,23 @@ function renderPilotage(){
     {l:'Delta stressé (−30%)', cur:Math.abs(stG30.deltaAp), base:avoir, bl:'avoir', v:avoir>0?Math.abs(stG30.deltaAp)/avoir*100:0, cap:100},
     {l:'Delta stressé (−45%)', cur:Math.abs(stG45.deltaAp), base:avoir, bl:'avoir', v:avoir>0?Math.abs(stG45.deltaAp)/avoir*100:0, cap:100}
   ];
-  // Boîtes du haut : Marge utilisée · Delta-équiv · Notionnel brut
+  // Boîtes du haut : Marge utilisée (% en gros) · Delta-équiv · Notionnel brut
+  var pctReal = brute100>0 ? m.margeReq/brute100*100 : 0;   // VRAI % : CBIL/UBIL à 100 %
+  var pct70   = brute>0    ? m.margeReq/brute*100    : 0;   // % Disnat : CBIL/UBIL à 70 %
   var topb=[
-    {l:'Marge utilisée', v:'$'+fi(Math.round(m.margeReq)),      r:(brute>0?m.margeReq/brute*100:0),          cap:s.mx,     s:'$'+fi(Math.round(brute))+' brute'},
+    {l:'Marge utilisée', big:true, pctReal:pctReal, pct70:pct70, cap:s.mx,
+     s:'$'+fi(Math.round(m.margeReq))+' utilisée'},
     {l:'Delta-équiv',    v:'$'+fi(Math.round(Math.abs(a.deltaEq))), r:(avoir>0?Math.abs(a.deltaEq)/avoir*100:0), cap:s.dx*100, s:'de l\'avoir'},
     {l:'Notionnel brut', v:'$'+fi(Math.round(notTot)),          r:(brute>0?notTot/brute*100:0),              cap:s.nx*100, s:'$'+fi(Math.round(brute))+' brute'}
   ];
   document.getElementById('pil-top-kpi').innerHTML = topb.map(function(i){
+    if(i.big){
+      var ratioR=i.cap>0?i.pctReal/i.cap:0;
+      var cR=ratioR>=1?'var(--red)':ratioR>=0.8?'var(--amber)':'var(--green)';
+      return '<div class="pil-kpi"><div class="pil-kpi-l">'+i.l+' &middot; bil 100%</div>'
+        +'<div class="pil-kpi-v" style="color:'+cR+';font-size:30px">'+i.pctReal.toFixed(0)+'%</div>'
+        +'<div class="pil-kpi-s">'+i.s+' &middot; bil 70% : '+i.pct70.toFixed(0)+'% &middot; plafond '+i.cap.toFixed(0)+'%</div></div>';
+    }
     var ratio=i.cap>0?i.r/i.cap:0;
     var c=ratio>=1?'var(--red)':ratio>=0.8?'var(--amber)':'var(--green)';
     return '<div class="pil-kpi"><div class="pil-kpi-l">'+i.l+'</div>'
