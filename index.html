@@ -5162,12 +5162,16 @@ function renderPilotage(){
   });
   var lim=function(dispo,parPanier){ return parPanier>0 ? dispo/parPanier : 99; };
   var cap=[];
-  cap.push({n:'Marge', d:'plafond '+s.mx+'% de la brute',
-    x: lim(brute*s.mx/100 - m.margeReq, PN.ve), cur:m.margeReq, lim:brute*s.mx/100, ap:PN.ve});
+  // Simulateur : base = brute100 (CBIL/UBIL comptés à 100 %, cash retirable).
+  // Le plafond à 70 % (convention Disnat = celui qui gouverne un vrai appel de
+  // marge) est rappelé en mention pour garder le garde-fou visible.
+  var plafM100 = brute100*s.mx/100, plafM70 = brute*s.mx/100;
+  cap.push({n:'Marge', d:'plafond '+s.mx+'% · bil 100% (70% : $'+fi(Math.round(plafM70))+')',
+    x: lim(plafM100 - m.margeReq, PN.ve), cur:m.margeReq, lim:plafM100, ap:PN.ve});
   cap.push({n:'Delta-équivalent', d:'plafond '+s.dx.toFixed(2)+"× l'avoir",
     x: lim(s.dx*avoir - Math.abs(a.deltaEq), PN.delta), cur:Math.abs(a.deltaEq), lim:s.dx*avoir, ap:PN.delta});
-  cap.push({n:'Notionnel total', d:'plafond '+s.nx.toFixed(1)+'× la brute',
-    x: lim(s.nx*brute - notTot, PN.notion), cur:notTot, lim:s.nx*brute, ap:PN.notion});
+  cap.push({n:'Notionnel total', d:'plafond '+s.nx.toFixed(1)+'× la brute · bil 100% (70% : $'+fi(Math.round(s.nx*brute))+')',
+    x: lim(s.nx*brute100 - notTot, PN.notion), cur:notTot, lim:s.nx*brute100, ap:PN.notion});
   // Seuils relatifs : le panier gonfle aussi le dénominateur
   var den90 = PN.not90 - t90*PN.notion;
   cap.push({n:'Tenor ≤ 90 jours', d:'plafond '+s.t90+'% du notionnel',
