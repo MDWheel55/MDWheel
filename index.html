@@ -628,10 +628,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
 
 
-  <!-- Section « COMPTA — P&L RÉALISÉ PAR MOIS » retirée : remplacée par
-       « COMPTA — FIN DE MOIS » ci-dessus (calcul des fins de mois via MDCompta).
-       Les fonctions renderCompta / comptaOptRealised / comptaActRealised restent
-       dans le JS mais sont inertes (garde if(!head||!body) return). -->
+  <div class="sec" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span>COMPTA — P&L RÉALISÉ PAR MOIS</span>
+    <span style="font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400">P&L réalisé (options fermées + ventes d'actions) · USD converti au taux du jour de la transaction · tout en CAD</span>
+  </div>
+
+  <div id="compta-resume" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem"></div>
+
+  <div class="pwrap" style="margin-bottom:1rem">
+    <table class="ptbl">
+      <thead id="compta-head"></thead>
+      <tbody id="compta-body"></tbody>
+      <tfoot id="compta-foot"></tfoot>
+    </table>
+  </div>
+
+  <div style="margin-top:0.75rem;font-size:10px;color:var(--muted);line-height:1.5">
+    Chaque montant est en CAD. Les colonnes « US » sont converties depuis l'USD au taux de change du jour de chaque transaction
+    (cache <span style="font-family:var(--mono)">FX_Historique</span> ; un <span style="font-family:var(--mono)">*</span> signale un mois où au moins une conversion a utilisé le taux du jour faute d'historique).
+    Le P&L d'un mois correspond à la date de <em>réalisation</em> : fermeture d'option (rachat / vente / expiration) ou vente d'action.
+  </div>
 
 </div>
 
@@ -761,7 +777,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </div>
     <div id="f-section-option">
     <div class="fgrid">
-      <div class="ff"><label>Sous-jacent</label><select id="f-ticker"><option>QQQ</option><option>SPY</option><option>GLD</option><option>NVDA</option><option>XEG</option><option>XIU</option></select></div>
+      <div class="ff"><label>Sous-jacent</label><select id="f-ticker"><option>QQQ</option><option>SPY</option><option>GLD</option><option>NVDA</option><option>XEG</option></select></div>
       <div class="ff"><label>Type</label><select id="f-type"><option value="PUT">PUT</option><option value="CALL">CALL</option></select></div>
       <div class="ff"><label>Strike ($)</label><input type="number" id="f-strike" value="490"></div>
       <div class="ff"><label>Expiration</label><input type="date" id="f-exp" onchange="calcDTE()"></div>
@@ -1406,12 +1422,9 @@ async function actualiserTout() {
       try { const y = await yahooQuote(s); if (y && y.c > 0) return y; } catch(e) {} // repli Yahoo
       return { c: 0 };
     };
-    // QQQ/SPY/GLD/NVDA/IBIT/SPYM = cotés aux US -> MarketData ; VIX -> Yahoo (^VIX).
-    const [q,s,g,n,ibit,spym,v,vxn,gvz] = await Promise.all([
-      usQuote('QQQ'), usQuote('SPY'), usQuote('GLD'), usQuote('NVDA'), usQuote('IBIT'), usQuote('SPYM'),
-      yahooQuote('VIX').catch(()=>({c:0})),
-      yahooQuote('VXN').catch(()=>({c:0})),   // IV Nasdaq-100 (proxy QQQ)
-      yahooQuote('GVZ').catch(()=>({c:0}))    // IV or (proxy GLD)
+    // QQQ/SPY/GLD/NVDA/IBIT/SPYM = cotés aux US -> MarketData.
+    const [q,s,g,n,ibit,spym] = await Promise.all([
+      usQuote('QQQ'), usQuote('SPY'), usQuote('GLD'), usQuote('NVDA'), usQuote('IBIT'), usQuote('SPYM')
     ]);
     if(q.c>0) mkt.QQQ=q.c;
     if(s.c>0) mkt.SPY=s.c;
@@ -1419,9 +1432,20 @@ async function actualiserTout() {
     if(n.c>0) mkt.NVDA=n.c;
     if(ibit.c>0) mkt.IBIT=prixValide('IBIT',ibit.c,mkt.IBIT);
     if(spym.c>0) mkt.SPYM=prixValide('SPYM',spym.c,mkt.SPYM);
-    if(v.c>0 && v.c < 80) mkt.VIX=v.c;  // VIX réaliste entre 0 et 80
-    if(vxn.c>0 && vxn.c < 90) mkt.VXN=vxn.c;
-    if(gvz.c>0 && gvz.c < 80) mkt.GVZ=gvz.c;
+    // Indices IV (VIX/VXN/GVZ) : BACKEND serveur (UrlFetchApp -> Yahoo ^VIX…) en
+    // primaire. Le chemin navigateur laissait VXN/GVZ figés sur leurs défauts.
+    const ivQuote = async (caret, plain) => {
+      try { const r = await gsApi({action:'getTsxPrice', symbol:caret});
+            const px = parseFloat(r && r.price); if (isFinite(px) && px > 0) return px; } catch(e) {}
+      try { const y = await yahooQuote(plain); if (y && y.c > 0) return y.c; } catch(e) {}
+      return 0;
+    };
+    const vLvl   = await ivQuote('^VIX','VIX');
+    const vxnLvl = await ivQuote('^VXN','VXN');   // IV Nasdaq-100 (proxy QQQ)
+    const gvzLvl = await ivQuote('^GVZ','GVZ');   // IV or (proxy GLD)
+    if(vLvl>0   && vLvl < 80)   mkt.VIX=vLvl;   // VIX réaliste entre 0 et 80
+    if(vxnLvl>0 && vxnLvl < 90) mkt.VXN=vxnLvl;
+    if(gvzLvl>0 && gvzLvl < 80) mkt.GVZ=gvzLvl;
     {
       // FX USD/CAD via le BACKEND (getFX) — côté serveur, comme les options.
       // Pas de CORS, pas de course Promise.all : Yahoo CAD=X primaire, frankfurter en repli.
@@ -1468,19 +1492,21 @@ async function actualiserTout() {
     setStatus('⚠ Prix marché — échec', 'var(--red)');
   }
 
-  // ── 2. RSI (Finnhub) ──
+  // ── 2. RSI (calculé côté serveur sur les clôtures Yahoo) ──
+  // Finnhub /indicator échouait depuis le navigateur (CORS/plan gratuit) : le RSI
+  // restait figé sur ses défauts (QQQ 65 / SPY 62 / GLD 40). Le backend getRSI
+  // calcule le RSI(14) de Wilder à partir de 3 mois de clôtures Yahoo. Fiable.
   setStatus('2/4 RSI...');
   try {
-    const to=Math.floor(Date.now()/1000), from=to-86400*60;
-    const rsiPath = sym => '/indicator?symbol='+sym+'&resolution=D&from='+from+'&to='+to+'&indicator=rsi&timeperiod=14';
-    const [rq,rs,rg,rn] = await Promise.allSettled([
-      fhGet(rsiPath('QQQ')), fhGet(rsiPath('SPY')),
-      fhGet(rsiPath('GLD')), fhGet(rsiPath('NVDA'))
-    ]);
-    [[rq,'QQQ'],[rs,'SPY'],[rg,'GLD'],[rn,'NVDA']].forEach(([r,sym])=>{
-      if(r.status==='fulfilled'&&r.value&&r.value.rsi&&r.value.rsi.length)
-        rsiData[sym]=Math.round(r.value.rsi[r.value.rsi.length-1]*10)/10;
-    });
+    const dlr = ms => new Promise(r=>setTimeout(r,ms));
+    for (const sym of ['QQQ','SPY','GLD','NVDA']) {
+      try {
+        const r = await gsApi({action:'getRSI', symbol:sym});
+        const v = parseFloat(r && r.rsi);
+        if (isFinite(v) && v > 0) rsiData[sym] = v;
+      } catch(e) {}
+      await dlr(120);
+    }
     steps.rsi = true;
   } catch(e) { steps.rsi = true; }
 
@@ -1900,7 +1926,7 @@ function posRow(p, showOcc) {
 }
 
 // Devise de règlement d'un sous-jacent d'option (miroir de deviseDuTicker côté serveur).
-function deviseTicker(t){ var s=String(t||'').toUpperCase(); return (s==='XEG'||s==='XIU') ? 'CAD' : 'USD'; }
+function deviseTicker(t){ return String(t||'').toUpperCase()==='XEG' ? 'CAD' : 'USD'; }
 // Rend un total ventilé par devise : "USD +X$ · CAD +Y$" (n'affiche que les devises demandées).
 function fmtPnlDevises(o, curs){
   return curs.map(function(cur){
@@ -4735,16 +4761,6 @@ function majVeqtMix(){
 var VEQT_MIX = {us:0.396, ca:0.300, intl:0.236, em:0.068};
 var stkVue = 'brique';   // 'brique' | 'look'
 
-// Cible d'allocation PERSO sur la base actions (US+Canada+Intl+Émergents = 100 %).
-// Bitcoin et Or sont des satellites, hors cible : ils ne comptent pas dans les 100 %.
-// Distincte des poids VEQT — c'est TA répartition visée. Modifiable ici.
-var STK_CIBLE = {
-  'Actions US':               0.40,
-  'Actions Canada':           0.25,
-  'International développé':   0.25,
-  'Marchés émergents':        0.10
-};
-
 function setStkVue(v){
   stkVue = v;
   ['brique','look'].forEach(function(k){
@@ -4790,59 +4806,31 @@ function renderActionsFacteurs(){
   var hhi  = tot>0 ? rows.reduce(function(t,r){ var w=r.val/tot; return t+w*w; },0) : 0;
   var neff = hhi>0 ? 1/hhi : 0;
 
-  // Base actions = somme des sleeves qui ont une cible (BTC et Or exclus).
-  // La cible ne s'affiche que dans la vue Look-through VEQT (géographie éclatée).
-  var isLook = (stkVue === 'look');
-  var eqBase = isLook ? rows.reduce(function(t,r){
-                 return t + (STK_CIBLE[r.f]!=null ? r.val : 0); }, 0) : 0;
-  var cibleCell = function(r){
-    if(!isLook) return '';
-    if(STK_CIBLE[r.f]==null || eqBase<=0)
-      return '<td class="pil-num" style="color:var(--dim)">—</td>';
-    var reel  = r.val/eqBase*100;
-    var cible = STK_CIBLE[r.f]*100;
-    var d     = reel - cible;                       // écart en points de %
-    var col   = Math.abs(d)<=2 ? 'var(--green)' : Math.abs(d)<=5 ? 'var(--amber)' : 'var(--red)';
-    var gapUsd = r.val - STK_CIBLE[r.f]*eqBase;      // + = surpondéré $, − = déficit à combler
-    return '<td class="pil-num" title="Écart '+(gapUsd>=0?'+':'−')+'$'+fi(Math.round(Math.abs(gapUsd)))
-        +' vs cible (base actions $'+fi(Math.round(eqBase))+')">'
-        +'<span style="font-weight:700">'+reel.toFixed(1)+'%</span>'
-        +'<span style="color:var(--muted)"> / '+cible.toFixed(0)+'%</span>&nbsp;&nbsp;'
-        +'<span style="color:'+col+';font-weight:700">'+(d>=0?'+':'−')+Math.abs(d).toFixed(1)+'pp</span></td>';
-  };
-  var emptyCible = isLook ? '<td></td>' : '';
-
   el.innerHTML =
     '<thead><tr><th>Classe d\'actif</th><th>Provenance</th><th class="pil-num">Valeur marché</th>'
-    +'<th class="pil-num">% du portefeuille</th>'
-    + (isLook ? '<th class="pil-num">Réel / cible · base actions</th>' : '')
-    +'<th style="width:20%"></th></tr></thead><tbody>'
+    +'<th class="pil-num">% du portefeuille</th><th style="width:28%"></th></tr></thead><tbody>'
     + rows.map(function(r){
         var pc = tot>0 ? r.val/tot*100 : 0;
         return '<tr><td>'+r.f+'</td>'
           +'<td style="color:var(--muted)">'+r.src+'</td>'
           +'<td class="pil-num" style="font-weight:700">$'+fi(Math.round(r.val))+'</td>'
           +'<td class="pil-num">'+pc.toFixed(1)+'%</td>'
-          + cibleCell(r)
           +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+Math.min(100,pc).toFixed(0)
             +'%;background:'+r.col+'"></div></div></td></tr>';
       }).join('')
     + '<tr style="border-top:1px solid var(--border)"><td style="font-weight:700">Total des titres détenus</td>'
       +'<td></td><td class="pil-num" style="font-weight:700">$'+fi(Math.round(tot))+'</td>'
       +'<td class="pil-num">100%</td>'
-      + emptyCible
       +'<td style="color:var(--muted)">'+(avoir>0?(tot/avoir*100).toFixed(0)+'% de l\'avoir total':'')+'</td></tr>'
     + '<tr><td style="color:var(--muted)">T-bills · collatéral, exclus du calcul</td>'
       +'<td style="color:var(--dim)">CBIL + UBIL</td>'
       +'<td class="pil-num" style="color:var(--muted)">$'+fi(Math.round(tbills))+'</td>'
-      +'<td class="pil-num" style="color:var(--muted)">—</td>'
-      + emptyCible +'<td></td></tr>'
+      +'<td class="pil-num" style="color:var(--muted)">—</td><td></td></tr>'
     + '<tr><td style="color:var(--muted)">Diversification effective</td>'
       +'<td style="color:var(--dim)">nombre effectif de paris (Herfindahl)</td>'
       +'<td class="pil-num" style="color:'+(neff>=4?'var(--green)':neff>=3?'var(--amber)':'var(--red)')+'">'
         +neff.toFixed(1)+' / '+rows.length+'</td>'
-      +'<td class="pil-num" style="color:var(--muted)">—</td>'
-      + emptyCible +'<td></td></tr>'
+      +'<td class="pil-num" style="color:var(--muted)">—</td><td></td></tr>'
     + '</tbody>';
 }
 
@@ -4901,7 +4889,9 @@ function bsIV(type,S,K,T,px,r){
 function pilotSpot(tk){
   tk=String(tk||'').toUpperCase();
   var t={QQQ:mkt.QQQ,SPY:mkt.SPY,GLD:mkt.GLD,NVDA:mkt.NVDA,XEG:mkt.XEG,IBIT:mkt.IBIT};
-  return parseFloat(t[tk])||0;
+  var v = parseFloat(t[tk]);
+  if(!(v>0)) v = parseFloat(mkt[tk]);   // repli : tout sous-jacent coté (XIU, XEC, XEF…) -> delta/greeks calculés
+  return v||0;
 }
 function pilotIsCall(p){
   var t=String(p.type||'').toUpperCase();
