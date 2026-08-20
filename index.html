@@ -1510,9 +1510,23 @@ async function actualiserTout() {
     steps.rsi = true;
   } catch(e) { steps.rsi = true; }
 
-  // ── 3. Prix options (Yahoo Finance) ──
+  // ── 3. Prix options ──
+  //  · Options réglées CAD (XEG, XIU…) : aucune API de cotation Bourse de Montréal
+  //    -> marquage Black-Scholes local (spot TSX + IV figée + dividende). Instantané.
+  //  · Options US : MarketData/Yahoo comme avant.
   setStatus('3/4 Prix options...');
   for(const p of positions.filter(p=>p.occ&&p.statut!=='stock')) {
+    if(deviseTicker(p.ticker)==='CAD'){
+      try {
+        const prixC = bsMarkCad(p);
+        if(prixC && prixC>0){
+          p.prixActuel = prixC.toFixed(2);
+          await gsApi({action:'updatePosition',id:p.id,prixActuel:p.prixActuel});
+          optOk++;
+        } else { optErr++; }
+      } catch(e){ optErr++; }
+      continue;   // pas de délai réseau : le pricing BS est local
+    }
     for(let attempt=1; attempt<=2; attempt++) {
       try {
         const prix = await fetchOptPrice(p.occ, p.statut);
@@ -1926,7 +1940,7 @@ function posRow(p, showOcc) {
 }
 
 // Devise de règlement d'un sous-jacent d'option (miroir de deviseDuTicker côté serveur).
-function deviseTicker(t){ return String(t||'').toUpperCase()==='XEG' ? 'CAD' : 'USD'; }
+function deviseTicker(t){ return /^(XEG|XIU|XUI|XEC|XEF|VEQT|CBIL)$/.test(String(t||'').toUpperCase()) ? 'CAD' : 'USD'; }
 // Rend un total ventilé par devise : "USD +X$ · CAD +Y$" (n'affiche que les devises demandées).
 function fmtPnlDevises(o, curs){
   return curs.map(function(cur){
@@ -4855,37 +4869,90 @@ function _ncdf(x){
 }
 function _npdf(x){ return Math.exp(-0.5*x*x)/Math.sqrt(2*Math.PI); }
 
-// type : 'C' ou 'P' — grecs d'UNE option LONGUE, par action
-function bsGreeks(type,S,K,T,sig,r){
+// type : 'C' ou 'P' — grecs d'UNE option LONGUE, par action.
+// q = rendement de dividende continu (défaut 0). Pour un FNB qui distribue
+// (XEG, XIU…), q>0 majore la valeur des puts et minore celle des calls —
+// c'est ce qui faisait l'écart de ~0,12 $ sur le put XEG dans le test.
+function bsGreeks(type,S,K,T,sig,r,q){
   if(!(S>0&&K>0&&T>0&&sig>0)) return null;
+  q = q||0;
   var isC = String(type).toUpperCase().charAt(0)==='C';
   var sq = Math.sqrt(T);
-  var d1 = (Math.log(S/K)+(r+sig*sig/2)*T)/(sig*sq);
+  var d1 = (Math.log(S/K)+(r-q+sig*sig/2)*T)/(sig*sq);
   var d2 = d1-sig*sq;
-  var price = isC ? S*_ncdf(d1)-K*Math.exp(-r*T)*_ncdf(d2)
-                  : K*Math.exp(-r*T)*_ncdf(-d2)-S*_ncdf(-d1);
+  var eq = Math.exp(-q*T);
+  var price = isC ? S*eq*_ncdf(d1)-K*Math.exp(-r*T)*_ncdf(d2)
+                  : K*Math.exp(-r*T)*_ncdf(-d2)-S*eq*_ncdf(-d1);
   return {
     price: price,
-    delta: isC ? _ncdf(d1) : _ncdf(d1)-1,
-    gamma: _npdf(d1)/(S*sig*sq),
-    vega : S*_npdf(d1)*sq/100,                    // $ par point d'IV, par action
-    theta: (-(S*_npdf(d1)*sig)/(2*sq)
-            + (isC ? -r*K*Math.exp(-r*T)*_ncdf(d2)
-                   :  r*K*Math.exp(-r*T)*_ncdf(-d2)))/365
+    delta: isC ? eq*_ncdf(d1) : eq*(_ncdf(d1)-1),
+    gamma: eq*_npdf(d1)/(S*sig*sq),
+    vega : S*eq*_npdf(d1)*sq/100,                 // $ par point d'IV, par action
+    theta: (-(S*eq*_npdf(d1)*sig)/(2*sq)
+            + (isC ? -r*K*Math.exp(-r*T)*_ncdf(d2)+q*S*eq*_ncdf(d1)
+                   :  r*K*Math.exp(-r*T)*_ncdf(-d2)-q*S*eq*_ncdf(-d1)))/365
   };
 }
-// IV implicite par bisection sur le prix marché
-function bsIV(type,S,K,T,px,r){
+// IV implicite par bisection sur le prix marché (q = dividende, défaut 0)
+function bsIV(type,S,K,T,px,r,q){
   if(!(S>0&&K>0&&T>0&&px>0)) return 0;
   var lo=0.005, hi=4.0, mid=0.25, g;
   for(var i=0;i<70;i++){
     mid=(lo+hi)/2;
-    g=bsGreeks(type,S,K,T,mid,r);
+    g=bsGreeks(type,S,K,T,mid,r,q);
     if(!g) return 0;
     if(g.price>px) hi=mid; else lo=mid;
   }
   return (mid>0.006 && mid<3.9) ? mid : 0;
 }
+// ═══════════════════════════════════════════════════════════
+//  MARQUAGE THÉORIQUE DES OPTIONS CANADIENNES (Black-Scholes)
+//  Il n'existe pas d'API de cotation abordable pour la Bourse de Montréal.
+//  On price donc les options réglées CAD (XEG, XIU…) par Black-Scholes :
+//   · spot   = mkt[ticker] (prix TSX récupéré côté serveur, fiable)
+//   · IV     = FIGÉE à l'ouverture, mémorisée en localStorage par OCC
+//              (seed = IV implicite du dernier prixActuel connu)
+//   · q      = rendement de distribution du FNB (majore les puts)
+//  Re-mark quotidien depuis le spot + décroissance du temps. Pour recalibrer
+//  après une vérif Barchart : mets à jour prixActuel puis resetBsMark(occ).
+// ═══════════════════════════════════════════════════════════
+var CAD_DIST = {XEG:0.70, XIU:1.09, XUI:1.09, XEC:0.70, XEF:1.20, VEQT:0.76}; // distribution annuelle CAD/part
+
+function bsMarkCad(p){
+  var tk = String(p.ticker||'').toUpperCase();
+  if(deviseTicker(tk)!=='CAD') return null;          // options réglées CAD seulement
+  var S = parseFloat(mkt[tk])||0;                     // spot CAD (getTsxPrice serveur)
+  var K = parseFloat(p.strike)||0;
+  var dte = getDTE(p), T = Math.max(dte,1)/365;
+  if(!(S>0 && K>0)) return null;
+  var isC = pilotIsCall(p);                           // call/put via OCC
+  var q   = (CAD_DIST[tk]||0)/S;                       // rendement dividende continu approx.
+  var occ = String(p.occ||'').toUpperCase();
+  var key = 'bsiv_'+(occ || tk+'-'+K+'-'+(p.expiration||'')+'-'+(isC?'C':'P'));
+
+  // IV figée : cache localStorage, sinon seed depuis le dernier prix connu.
+  var iv = 0;
+  try { var c=parseFloat(localStorage.getItem(key)); if(isFinite(c)&&c>0) iv=c; } catch(e){}
+  if(!(iv>0)){
+    var seed = parseFloat(p.prixActuel)||parseFloat(p.prime)||0;
+    iv = bsIV(isC?'C':'P', S, K, T, seed, PILOT_R, q);
+    if(iv>0){ try{ localStorage.setItem(key, iv.toFixed(4)); }catch(e){} }
+  }
+  if(!(iv>0)) return null;
+
+  var g = bsGreeks(isC?'C':'P', S, K, T, iv, PILOT_R, q);
+  if(!g || !(g.price>0)) return null;
+  return Math.round(g.price*100)/100;                 // prix par contrat (CAD)
+}
+
+// Efface les IV figées pour re-seed (recalibrage après vérif du vrai marché).
+function resetBsMark(occ){
+  try{
+    if(occ){ localStorage.removeItem('bsiv_'+String(occ).toUpperCase()); }
+    else { Object.keys(localStorage).forEach(function(k){ if(k.indexOf('bsiv_')===0) localStorage.removeItem(k); }); }
+  }catch(e){}
+}
+
 function pilotSpot(tk){
   tk=String(tk||'').toUpperCase();
   var t={QQQ:mkt.QQQ,SPY:mkt.SPY,GLD:mkt.GLD,NVDA:mkt.NVDA,XEG:mkt.XEG,IBIT:mkt.IBIT};
@@ -4894,6 +4961,11 @@ function pilotSpot(tk){
   return v||0;
 }
 function pilotIsCall(p){
+  // L'OCC est la source autoritaire : ...C000... = call, ...P000... = put.
+  // (protège contre un statut « short-call » saisi par erreur sur un put, ex. XIU).
+  var occ=String(p.occ||'').toUpperCase();
+  var m=occ.match(/^[A-Z]+\d{6}([CP])\d{8}$/);
+  if(m) return m[1]==='C';
   var t=String(p.type||'').toUpperCase();
   return t.charAt(0)==='C' || p.statut==='short-call' || p.statut==='long-call';
 }
@@ -4936,8 +5008,9 @@ function pilotPositions(){
     var cvt   = (deviseTicker(tk)==='CAD') ? (1/fx) : 1;   // → USD
     var sgn   = isLg ? 1 : -1;
 
-    var iv = (p.iv && parseFloat(p.iv)>0) ? parseFloat(p.iv)/100 : bsIV(isC?'C':'P',S,K,T,px,PILOT_R);
-    var g  = iv>0 ? bsGreeks(isC?'C':'P',S,K,T,iv,PILOT_R) : null;
+    var qDiv = (deviseTicker(tk)==='CAD' && S>0) ? (CAD_DIST[tk]||0)/S : 0;  // dividende FNB CAD
+    var iv = (p.iv && parseFloat(p.iv)>0) ? parseFloat(p.iv)/100 : bsIV(isC?'C':'P',S,K,T,px,PILOT_R,qDiv);
+    var g  = iv>0 ? bsGreeks(isC?'C':'P',S,K,T,iv,PILOT_R,qDiv) : null;
     var dOpt = g ? g.delta : 0;
 
     var ve   = (typeof calcValEmprunt==='function' && !isLg) ? (calcValEmprunt(p)*cvt) : 0;
