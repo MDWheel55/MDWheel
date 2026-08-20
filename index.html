@@ -777,7 +777,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </div>
     <div id="f-section-option">
     <div class="fgrid">
-      <div class="ff"><label>Sous-jacent</label><select id="f-ticker"><option>QQQ</option><option>SPY</option><option>GLD</option><option>NVDA</option><option>XEG</option></select></div>
+      <div class="ff"><label>Sous-jacent</label><select id="f-ticker"><option>QQQ</option><option>SPY</option><option>GLD</option><option>NVDA</option><option>XEG</option><option>XIU</option><option>XEC</option><option>XEF</option></select></div>
       <div class="ff"><label>Type</label><select id="f-type"><option value="PUT">PUT</option><option value="CALL">CALL</option></select></div>
       <div class="ff"><label>Strike ($)</label><input type="number" id="f-strike" value="490"></div>
       <div class="ff"><label>Expiration</label><input type="date" id="f-exp" onchange="calcDTE()"></div>
@@ -1853,7 +1853,11 @@ function veSpot(tk){
 }
 
 function calcValEmprunt(p) {
-  if (p.statut !== 'short') return 0;
+  // Short put = celui qui immobilise la marge. On juge « put » d'après l'OCC
+  // (source autoritaire) et « short » d'après le statut, pour que la VE compte
+  // même si la position est étiquetée par erreur « short-call » (cas XIU).
+  var _isShort = String(p.statut||'').indexOf('short') === 0;
+  if (!(_isShort && !pilotIsCall(p))) return 0;
   const strike = parseFloat(p.strike) || 0;
   const contr  = Math.abs(parseInt(p.contrats) || 1);
   const tkr    = (p.ticker||'').toUpperCase();
@@ -2582,6 +2586,16 @@ document.addEventListener('DOMContentLoaded', function() {
   if (statEl) statEl.addEventListener('change', autoImpact);
 });
 
+// Statut de position à partir du type/opération, avec l'OCC comme arbitre
+// pour call/put (ex. un OCC ...P... force « put » même si le champ Type dit CALL).
+function deriveStatut(type, operation, occ){
+  var m = String(occ||'').toUpperCase().match(/^[A-Z]+\d{6}([CP])\d{8}$/);
+  var isCall = m ? (m[1]==='C') : (String(type||'').toUpperCase().charAt(0)==='C');
+  var isLong = /^B/.test(String(operation||'').toUpperCase());   // BTO/BTC = achat = long
+  if(isCall) return isLong ? 'long-call' : 'short-call';
+  return isLong ? 'long' : 'short';
+}
+
 function getFormData() {
   const expVal = document.getElementById('f-exp').value;
   let dte = 0;
@@ -2628,6 +2642,7 @@ async function _savePositionInner() {
   setSyncStatus(false, 'Sauvegarde...');
   if (editingId) {
     data.id = editingId;
+    data.statut = deriveStatut(data.type, data.operation, data.occ);  // recalcule short/short-call selon Type + OCC
     await gsApi({action:'updatePosition', ...data});
     const idx = positions.findIndex(p => p.id === editingId);
     if (idx > -1) positions[idx] = {...positions[idx], ...data};
