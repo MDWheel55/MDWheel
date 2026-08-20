@@ -4928,28 +4928,36 @@ function bsMarkCad(p){
   var isC = pilotIsCall(p);                           // call/put via OCC
   var q   = (CAD_DIST[tk]||0)/S;                       // rendement dividende continu approx.
   var occ = String(p.occ||'').toUpperCase();
-  var key = 'bsiv_'+(occ || tk+'-'+K+'-'+(p.expiration||'')+'-'+(isC?'C':'P'));
+  var base = occ || (tk+'-'+K+'-'+(p.expiration||'')+'-'+(isC?'C':'P'));
+  var kIV = 'bsiv_'+base;   // IV figée
+  var kPX = 'bspx_'+base;   // dernier prix marqué par BS (pour détecter une saisie manuelle)
 
-  // IV figée : cache localStorage, sinon seed depuis le dernier prix connu.
-  var iv = 0;
-  try { var c=parseFloat(localStorage.getItem(key)); if(isFinite(c)&&c>0) iv=c; } catch(e){}
-  if(!(iv>0)){
-    var seed = parseFloat(p.prixActuel)||parseFloat(p.prime)||0;
-    iv = bsIV(isC?'C':'P', S, K, T, seed, PILOT_R, q);
-    if(iv>0){ try{ localStorage.setItem(key, iv.toFixed(4)); }catch(e){} }
+  var curPx = parseFloat(p.prixActuel)||parseFloat(p.prime)||0;
+  var ivFige=NaN, lastMark=NaN;
+  try { ivFige=parseFloat(localStorage.getItem(kIV)); lastMark=parseFloat(localStorage.getItem(kPX)); } catch(e){}
+
+  // Re-calibrer l'IV si : (a) aucune IV figée encore, OU (b) tu as modifié le prix
+  // à la main (prixActuel diffère du dernier prix que BS avait écrit) -> on ré-ancre
+  // l'IV sur ta valeur, puis on la fait rouler depuis le spot les jours suivants.
+  var edite = isFinite(lastMark) && Math.abs(curPx-lastMark)>0.005;
+  if(!(isFinite(ivFige)&&ivFige>0) || edite){
+    var seedIV = bsIV(isC?'C':'P', S, K, T, curPx, PILOT_R, q);
+    if(seedIV>0){ ivFige=seedIV; try{ localStorage.setItem(kIV, ivFige.toFixed(4)); }catch(e){} }
   }
-  if(!(iv>0)) return null;
+  if(!(isFinite(ivFige)&&ivFige>0)) return null;
 
-  var g = bsGreeks(isC?'C':'P', S, K, T, iv, PILOT_R, q);
+  var g = bsGreeks(isC?'C':'P', S, K, T, ivFige, PILOT_R, q);
   if(!g || !(g.price>0)) return null;
-  return Math.round(g.price*100)/100;                 // prix par contrat (CAD)
+  var mark = Math.round(g.price*100)/100;             // prix par contrat (CAD)
+  try{ localStorage.setItem(kPX, mark.toFixed(2)); }catch(e){}
+  return mark;
 }
 
-// Efface les IV figées pour re-seed (recalibrage après vérif du vrai marché).
+// Efface IV figées + derniers marks pour tout re-calibrer depuis prixActuel.
 function resetBsMark(occ){
   try{
-    if(occ){ localStorage.removeItem('bsiv_'+String(occ).toUpperCase()); }
-    else { Object.keys(localStorage).forEach(function(k){ if(k.indexOf('bsiv_')===0) localStorage.removeItem(k); }); }
+    if(occ){ occ=String(occ).toUpperCase(); localStorage.removeItem('bsiv_'+occ); localStorage.removeItem('bspx_'+occ); }
+    else { Object.keys(localStorage).forEach(function(k){ if(k.indexOf('bsiv_')===0||k.indexOf('bspx_')===0) localStorage.removeItem(k); }); }
   }catch(e){}
 }
 
