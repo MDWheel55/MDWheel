@@ -501,6 +501,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <label>XEF <input class="pil-inp" id="cible-xef" type="number" step="1" value="25" style="width:52px" onchange="renderCibles()"></label>
     <label>XEC <input class="pil-inp" id="cible-xec" type="number" step="1" value="10" style="width:52px" onchange="renderCibles()"></label>
     <span style="color:var(--dim)">· base = valeur des 4 titres · hors VEQT/XEG/GLD/IBIT/T-bills</span>
+    <span style="margin-left:14px;color:var(--text)">Montant à investir&nbsp;$&nbsp;CAD
+      <input class="pil-inp" id="cible-inv" type="number" step="100" min="0" placeholder="0" style="width:86px" oninput="renderCibles()"></span>
   </div>
   <div class="pil-wrap"><table class="pil-tbl" id="stk-cibles"></table></div>
 
@@ -4918,10 +4920,46 @@ function renderCibles(){
   });
   var tot = TK.reduce(function(s,o){ return s+o.val; },0);
 
+  // ── Plan d'achat buy-only pour un montant à investir ──
+  // On projette la cible sur le panier AGRANDI (tot + montant), puis on comble
+  // les déficits (jamais de vente). Parts entières, glouton sur le plus grand
+  // déficit restant, reliquat affiché.
+  var invEl = document.getElementById('cible-inv');
+  var inv = invEl ? (parseFloat(invEl.value)||0) : 0;
+  var plan = {}, reste = 0;
+  if(inv>0 && tot>=0 && somme>0){
+    var totAp = tot + inv;
+    TK.forEach(function(o){
+      var cph = cib[o.k]/somme;
+      o.deficit = Math.max(0, totAp*cph - o.val);   // manque en CAD pour être à la cible après
+      plan[o.t] = 0;
+    });
+    var sumDef = TK.reduce(function(s,o){ return s+o.deficit; },0);
+    // budget par titre : proportionnel aux déficits (si l'argent ne suffit pas à tout combler)
+    var budget = {};
+    TK.forEach(function(o){ budget[o.t] = sumDef>0 ? inv*Math.min(1, o.deficit/sumDef * (sumDef>inv?1:sumDef/inv) ) : inv/TK.length; });
+    // achat en parts entières, glouton : toujours la part qui réduit le plus le déficit relatif
+    var cash = inv;
+    var proj = {}; TK.forEach(function(o){ proj[o.t]=o.val; });
+    for(var guard=0; guard<2000; guard++){
+      var best=null, bestGap=-1;
+      TK.forEach(function(o){
+        if(!(o.pxCAD>0) || o.pxCAD>cash) return;
+        var cph = cib[o.k]/somme;
+        var gap = totAp*cph - proj[o.t];             // déficit restant en CAD
+        if(gap>bestGap && gap >= o.pxCAD*0.5){ bestGap=gap; best=o; }  // achète si ça comble au moins une demi-part
+      });
+      if(!best) break;
+      plan[best.t]++; proj[best.t]+=best.pxCAD; cash-=best.pxCAD;
+    }
+    reste = cash;
+  }
+
   el.innerHTML =
     '<thead><tr><th>Titre</th><th class="pil-num">Valeur (CAD)</th><th class="pil-num">Actuel</th>'
     +'<th class="pil-num">Cible</th><th class="pil-num">Écart</th><th class="pil-num">Rééquilibrage</th>'
-    +'<th style="width:22%"></th></tr></thead><tbody>'
+    +(inv>0?'<th class="pil-num">Plan $'+fi(Math.round(inv))+'</th>':'')
+    +'<th style="width:20%"></th></tr></thead><tbody>'
     + TK.map(function(o){
         var pc  = tot>0 ? o.val/tot*100 : 0;
         var cph = somme>0 ? cib[o.k]/somme*100 : 0;       // cible normalisée si la somme ≠ 100
@@ -4932,12 +4970,19 @@ function renderCibles(){
         var action = Math.abs(ec)<=2 ? '<span style="color:var(--green)">✓ dans la cible</span>'
                    : (dCAD>0 ? 'acheter ~'+Math.abs(parts)+' parts ($'+fi(Math.round(Math.abs(dCAD)))+')'
                              : 'vendre ~'+Math.abs(parts)+' parts ($'+fi(Math.round(Math.abs(dCAD)))+')');
+        var planCell = '';
+        if(inv>0){
+          var n = plan[o.t]||0;
+          planCell = '<td class="pil-num" style="color:'+(n>0?'var(--green)':'var(--dim)')+';font-weight:'+(n>0?'700':'400')+'">'
+            +(n>0 ? n+' parts · $'+fi(Math.round(n*o.pxCAD)) : '—')+'</td>';
+        }
         return '<tr><td><span class="tk" style="background:'+o.col+'22;color:'+o.col+'">'+o.t+'</span></td>'
           +'<td class="pil-num">$'+fi(Math.round(o.val))+'</td>'
           +'<td class="pil-num" style="font-weight:700">'+pc.toFixed(1)+'%</td>'
           +'<td class="pil-num" style="color:var(--muted)">'+cph.toFixed(0)+'%</td>'
           +'<td class="pil-num" style="color:'+ecCol+'">'+(ec>=0?'+':'')+ec.toFixed(1)+'%</td>'
           +'<td class="pil-num" style="color:var(--muted)">'+action+'</td>'
+          + planCell
           +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+Math.min(100,pc).toFixed(0)
             +'%;background:'+o.col+'"></div>'
             +'<div style="position:relative;top:-6px;left:'+Math.min(100,cph).toFixed(0)+'%;width:2px;height:8px;background:var(--text);opacity:0.7"></div></div></td></tr>';
@@ -4945,7 +4990,16 @@ function renderCibles(){
     + '<tr style="border-top:1px solid var(--border)"><td style="font-weight:700">Total panier</td>'
       +'<td class="pil-num" style="font-weight:700">$'+fi(Math.round(tot))+'</td>'
       +'<td class="pil-num">100%</td><td class="pil-num" style="color:var(--muted)">'+somme.toFixed(0)+'%</td>'
-      +'<td class="pil-num" style="color:var(--muted)">—</td><td colspan="2" style="color:var(--dim)">le trait vertical = la cible</td></tr>'
+      +'<td class="pil-num" style="color:var(--muted)">—</td><td style="color:var(--dim)">le trait vertical = la cible</td>'
+      +(inv>0?'<td class="pil-num" style="color:var(--muted)">reste $'+fi(Math.round(reste))+'</td>':'')
+      +'<td></td></tr>'
+    + (inv>0 ? '<tr><td colspan="'+(8)+'" style="color:var(--muted);font-size:10px;padding-top:6px">'
+        +'Plan « achat seulement » : le montant va d\'abord aux titres sous la cible (aucune vente). '
+        +'Poids après exécution : '+TK.map(function(o){
+            var totAp2 = tot+inv-reste;
+            var vAp = o.val+(plan[o.t]||0)*o.pxCAD;
+            return o.t+' '+(totAp2>0?(vAp/totAp2*100).toFixed(1):'0')+'%';
+          }).join(' · ')+'</td></tr>' : '')
     + '</tbody>';
 }
 
