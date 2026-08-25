@@ -493,6 +493,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
   <div class="pil-wrap"><table class="pil-tbl" id="stk-facteurs"></table></div>
 
+  <div class="sec" style="margin-top:1.25rem">CIBLES D'ACHAT &middot; panier SPYM / XIU / XEF / XEC</div>
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:7px;flex-wrap:wrap;font-family:var(--mono);font-size:10px;color:var(--muted)">
+    <span>Cibles&nbsp;%&nbsp;:</span>
+    <label>SPYM <input class="pil-inp" id="cible-spym" type="number" step="1" value="40" style="width:52px" onchange="renderCibles()"></label>
+    <label>XIU <input class="pil-inp" id="cible-xiu" type="number" step="1" value="25" style="width:52px" onchange="renderCibles()"></label>
+    <label>XEF <input class="pil-inp" id="cible-xef" type="number" step="1" value="25" style="width:52px" onchange="renderCibles()"></label>
+    <label>XEC <input class="pil-inp" id="cible-xec" type="number" step="1" value="10" style="width:52px" onchange="renderCibles()"></label>
+    <span style="color:var(--dim)">· base = valeur des 4 titres · hors VEQT/XEG/GLD/IBIT/T-bills</span>
+  </div>
+  <div class="pil-wrap"><table class="pil-tbl" id="stk-cibles"></table></div>
+
   <div class="sec">PORTEFEUILLE — VALEUR AU MARCHÉ</div>
   <div class="pwrap" style="margin-bottom:1.5rem">
     <table class="ptbl" id="stk-tbl">
@@ -4860,6 +4871,81 @@ function renderActionsFacteurs(){
       +'<td class="pil-num" style="color:'+(neff>=4?'var(--green)':neff>=3?'var(--amber)':'var(--red)')+'">'
         +neff.toFixed(1)+' / '+rows.length+'</td>'
       +'<td class="pil-num" style="color:var(--muted)">—</td><td></td></tr>'
+    + '</tbody>';
+
+  renderCibles();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CIBLES D'ACHAT — panier d'accumulation SPYM/XIU/XEF/XEC
+//  Compare la répartition RÉELLE de ces 4 titres à la cible
+//  (défaut 40/25/25/10, modifiable, mémorisée par appareil).
+//  Base du % = valeur totale des 4 titres seulement — c'est le
+//  panier d'achat, indépendant de VEQT/XEG/GLD/IBIT/T-bills.
+//  L'écart est traduit en $ CAD et en parts à acheter/vendre.
+// ═══════════════════════════════════════════════════════════
+function renderCibles(){
+  var el = document.getElementById('stk-cibles');
+  if(!el) return;
+  var fx = mkt.USDCAD || 1.41;
+  var defs = {spym:40, xiu:25, xef:25, xec:10};
+  var cib = {};
+  Object.keys(defs).forEach(function(k){
+    var inp = document.getElementById('cible-'+k);
+    var sv = null;
+    try{ sv = parseFloat(localStorage.getItem('cible_'+k)); }catch(e){}
+    if(inp){
+      if(inp.dataset.init!=='1' && isFinite(sv) && sv>=0){ inp.value = sv; }
+      inp.dataset.init = '1';
+      cib[k] = parseFloat(inp.value); if(!isFinite(cib[k])||cib[k]<0) cib[k]=defs[k];
+      try{ localStorage.setItem('cible_'+k, cib[k]); }catch(e){}
+    } else cib[k] = defs[k];
+  });
+  var somme = cib.spym+cib.xiu+cib.xef+cib.xec;
+
+  var TK = [
+    {t:'SPYM', k:'spym', col:'var(--spy)'},
+    {t:'XIU',  k:'xiu',  col:'var(--red)'},
+    {t:'XEF',  k:'xef',  col:'var(--qqq)'},
+    {t:'XEC',  k:'xec',  col:'var(--green)'}
+  ];
+  // Valeur CAD de chaque titre (XIU compte aussi une éventuelle position résiduelle XUI)
+  TK.forEach(function(o){
+    var vUSD = stkValeurUSD(o.t) + (o.t==='XIU' ? stkValeurUSD('XUI') : 0);
+    o.val = vUSD * fx;   // CAD
+    var pxNat = parseFloat(mkt[o.t]) || parseFloat(acctCost[o.t]) || 0;
+    o.pxCAD = STK_CAD[o.t] ? pxNat : pxNat * fx;   // prix d'une part en CAD
+  });
+  var tot = TK.reduce(function(s,o){ return s+o.val; },0);
+
+  el.innerHTML =
+    '<thead><tr><th>Titre</th><th class="pil-num">Valeur (CAD)</th><th class="pil-num">Actuel</th>'
+    +'<th class="pil-num">Cible</th><th class="pil-num">Écart</th><th class="pil-num">Rééquilibrage</th>'
+    +'<th style="width:22%"></th></tr></thead><tbody>'
+    + TK.map(function(o){
+        var pc  = tot>0 ? o.val/tot*100 : 0;
+        var cph = somme>0 ? cib[o.k]/somme*100 : 0;       // cible normalisée si la somme ≠ 100
+        var ec  = pc - cph;
+        var dCAD= tot>0 ? (cph-pc)/100*tot : 0;            // + = acheter, − = vendre
+        var parts = o.pxCAD>0 ? Math.round(dCAD/o.pxCAD) : 0;
+        var ecCol = Math.abs(ec)<=2 ? 'var(--green)' : Math.abs(ec)<=5 ? 'var(--amber)' : 'var(--red)';
+        var action = Math.abs(ec)<=2 ? '<span style="color:var(--green)">✓ dans la cible</span>'
+                   : (dCAD>0 ? 'acheter ~'+Math.abs(parts)+' parts ($'+fi(Math.round(Math.abs(dCAD)))+')'
+                             : 'vendre ~'+Math.abs(parts)+' parts ($'+fi(Math.round(Math.abs(dCAD)))+')');
+        return '<tr><td><span class="tk" style="background:'+o.col+'22;color:'+o.col+'">'+o.t+'</span></td>'
+          +'<td class="pil-num">$'+fi(Math.round(o.val))+'</td>'
+          +'<td class="pil-num" style="font-weight:700">'+pc.toFixed(1)+'%</td>'
+          +'<td class="pil-num" style="color:var(--muted)">'+cph.toFixed(0)+'%</td>'
+          +'<td class="pil-num" style="color:'+ecCol+'">'+(ec>=0?'+':'')+ec.toFixed(1)+'%</td>'
+          +'<td class="pil-num" style="color:var(--muted)">'+action+'</td>'
+          +'<td><div class="pil-mini"><div class="pil-mini-f" style="width:'+Math.min(100,pc).toFixed(0)
+            +'%;background:'+o.col+'"></div>'
+            +'<div style="position:relative;top:-6px;left:'+Math.min(100,cph).toFixed(0)+'%;width:2px;height:8px;background:var(--text);opacity:0.7"></div></div></td></tr>';
+      }).join('')
+    + '<tr style="border-top:1px solid var(--border)"><td style="font-weight:700">Total panier</td>'
+      +'<td class="pil-num" style="font-weight:700">$'+fi(Math.round(tot))+'</td>'
+      +'<td class="pil-num">100%</td><td class="pil-num" style="color:var(--muted)">'+somme.toFixed(0)+'%</td>'
+      +'<td class="pil-num" style="color:var(--muted)">—</td><td colspan="2" style="color:var(--dim)">le trait vertical = la cible</td></tr>'
     + '</tbody>';
 }
 
