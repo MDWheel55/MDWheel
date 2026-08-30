@@ -4905,7 +4905,7 @@ function setTenorVue(v){
   if(t) t.style.display = (v==='table')?'':'none';
 }
 var TENOR_COL = {QQQ:'var(--qqq)', SPY:'var(--spy)', GLD:'var(--gld)', XEG:'var(--xeg)', NVDA:'var(--blue)', XIU:'#45c4b0'};
-function renderTenorChart(L){
+function renderTenorChart(L, capBrute){
   var el = document.getElementById('pil-tenor-chart');
   if(!el) return;
   setTenorVue(tenorVue);   // applique l'état des boutons/visibilité
@@ -4924,8 +4924,8 @@ function renderTenorChart(L){
   var dates = Object.keys(byExp).sort();
   if(!dates.length){ el.innerHTML=''; return; }
 
-  var maxV = 1;
-  dates.forEach(function(d){ maxV = Math.max(maxV, byExp[d].tot, byExp[d].ve); });
+  var maxV = 1, maxDte = 1;
+  dates.forEach(function(d){ maxV = Math.max(maxV, byExp[d].tot, byExp[d].ve); maxDte = Math.max(maxDte, byExp[d].dte); });
   var kFmt = function(v){ return v>=1e6 ? (v/1e6).toFixed(2)+'M' : Math.round(v/1000)+'k'; };
   var dFmt = function(d){ var p=d.split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : d; };
 
@@ -4934,14 +4934,35 @@ function renderTenorChart(L){
   var present = {};
   dates.forEach(function(d){ Object.keys(byExp[d].tk).forEach(function(t){ present[t]=1; }); });
 
-  var W=1000, H=250, mL=52, mR=8, mT=20, mB=36;
+  // ÉCHELLE DE TEMPS RÉELLE : x proportionnel au DTE (aujourd'hui = bord gauche).
+  // Les échéances rapprochées gardent un écart minimal lisible (dodge léger) —
+  // la position vraie reste marquée par un petit repère sur l'axe.
+  var W=1000, H=268, mL=52, mR=14, mT=20, mB=50;
   var pw = W-mL-mR, ph = H-mT-mB;
-  var gw = pw/dates.length;                       // largeur d'un groupe (date)
-  var bw = Math.min(gw*0.52, 64);                 // barre notionnel
-  var vw = Math.min(gw*0.20, 22);                 // barre VE
+  var span = maxDte*1.06;
+  var bw = 30, vw = 11, gap = 3;                  // barre notionnel + barre VE
+  var slotW = bw+gap+vw;
   var y = function(v){ return mT + ph*(1 - v/maxV); };
+  var xT = function(dte){ return mL + pw*(dte/span); };   // position temporelle vraie
+
+  // dodge : centres à au moins slotW+6 px l'un de l'autre, sans sortir du cadre
+  var ctr = dates.map(function(d){ return xT(byExp[d].dte); });
+  for(var i2=1;i2<ctr.length;i2++) ctr[i2]=Math.max(ctr[i2], ctr[i2-1]+slotW+6);
+  for(var i3=ctr.length-1;i3>=0;i3--){
+    var lim = W-mR-slotW/2 - (ctr.length-1-i3)*(slotW+6);
+    if(ctr[i3]>lim) ctr[i3]=lim;
+    if(i3<ctr.length-1) ctr[i3]=Math.min(ctr[i3], ctr[i3+1]-slotW-6);
+  }
 
   var svg = '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="Notionnel et marge par échéance">';
+  // grille verticale temporelle : un repère tous les 90 jours + ligne « aujourd'hui »
+  for(var t90=90; t90<span; t90+=90){
+    var gx=xT(t90);
+    svg += '<line x1="'+gx+'" y1="'+mT+'" x2="'+gx+'" y2="'+(mT+ph)+'" stroke="var(--border)" stroke-width="1" opacity="0.35"/>';
+    svg += '<text x="'+gx+'" y="'+(mT-7)+'" text-anchor="middle" font-size="8.5" fill="var(--dim)" font-family="var(--mono)">'+t90+'j</text>';
+  }
+  svg += '<line x1="'+mL+'" y1="'+mT+'" x2="'+mL+'" y2="'+(mT+ph)+'" stroke="var(--green)" stroke-width="1" opacity="0.5"/>';
+  svg += '<text x="'+(mL+3)+'" y="'+(mT-7)+'" text-anchor="start" font-size="8.5" fill="var(--green)" font-family="var(--mono)">aujourd\'hui</text>';
   // grille + axe Y (récessifs)
   [0.25,0.5,0.75,1].forEach(function(f){
     var vy=y(maxV*f);
@@ -4952,8 +4973,13 @@ function renderTenorChart(L){
 
   dates.forEach(function(d,i){
     var g = byExp[d];
-    var x0 = mL + i*gw + (gw-bw-vw-3)/2;
-    // — notionnel empilé par ticker (gaps 2px entre segments, coins arrondis au sommet)
+    var cx = ctr[i];                 // centre (éventuellement décalé)
+    var tx = xT(g.dte);              // position temporelle vraie
+    var x0 = cx - slotW/2;
+    // repère de position vraie sur l'axe (visible surtout quand il y a dodge)
+    svg += '<line x1="'+tx+'" y1="'+(mT+ph)+'" x2="'+tx+'" y2="'+(mT+ph+4)+'" stroke="var(--muted)" stroke-width="2"/>';
+    if(Math.abs(tx-cx)>4) svg += '<line x1="'+tx+'" y1="'+(mT+ph+4)+'" x2="'+cx+'" y2="'+(mT+ph+9)+'" stroke="var(--dim)" stroke-width="1"/>';
+    // — notionnel empilé par ticker (gaps 2px, coins arrondis au sommet)
     var acc = 0;
     var segs = ORDER.filter(function(t){ return g.tk[t]>0; });
     segs.forEach(function(t,si){
@@ -4965,14 +4991,16 @@ function renderTenorChart(L){
       acc += v;
     });
     // — barre VE (marge immobilisée), gris neutre
+    var pctM = (capBrute>0) ? g.ve/capBrute*100 : 0;
     if(g.ve>0.5){
-      svg += '<rect x="'+(x0+bw+3)+'" y="'+y(g.ve)+'" width="'+vw+'" height="'+Math.max(1,(mT+ph)-y(g.ve))+'" fill="var(--dim)" opacity="0.85" rx="3">'
-           + '<title>Marge (VE) · '+dFmt(d)+' · $'+fi(Math.round(g.ve))+'</title></rect>';
+      svg += '<rect x="'+(x0+bw+gap)+'" y="'+y(g.ve)+'" width="'+vw+'" height="'+Math.max(1,(mT+ph)-y(g.ve))+'" fill="var(--dim)" opacity="0.85" rx="3">'
+           + '<title>Marge (VE) · '+dFmt(d)+' · $'+fi(Math.round(g.ve))+' · '+pctM.toFixed(1)+'% de la capacité</title></rect>';
     }
-    // — étiquettes : total au sommet, date + DTE sous l'axe
+    // — étiquettes : total au sommet ; date, DTE et % marge sous l'axe
     svg += '<text x="'+(x0+bw/2)+'" y="'+(y(g.tot)-5)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--text)" font-family="var(--mono)">$'+kFmt(g.tot)+'</text>';
-    svg += '<text x="'+(mL+i*gw+gw/2)+'" y="'+(mT+ph+13)+'" text-anchor="middle" font-size="9.5" fill="var(--muted)" font-family="var(--mono)">'+dFmt(d)+'</text>';
-    svg += '<text x="'+(mL+i*gw+gw/2)+'" y="'+(mT+ph+25)+'" text-anchor="middle" font-size="9" fill="var(--dim)" font-family="var(--mono)">'+g.dte+'j</text>';
+    svg += '<text x="'+cx+'" y="'+(mT+ph+19)+'" text-anchor="middle" font-size="9.5" fill="var(--muted)" font-family="var(--mono)">'+dFmt(d)+'</text>';
+    svg += '<text x="'+cx+'" y="'+(mT+ph+30)+'" text-anchor="middle" font-size="9" fill="var(--dim)" font-family="var(--mono)">'+g.dte+'j</text>';
+    svg += '<text x="'+cx+'" y="'+(mT+ph+42)+'" text-anchor="middle" font-size="9" font-weight="700" fill="'+(pctM>=20?'var(--red)':pctM>=10?'var(--amber)':'var(--green)')+'" font-family="var(--mono)">'+(g.ve>0.5?pctM.toFixed(1)+'%':'—')+'</text>';
   });
   svg += '</svg>';
 
@@ -4983,7 +5011,8 @@ function renderTenorChart(L){
       +'<span style="font-family:var(--mono);font-size:9.5px;color:var(--muted)">'+t+'</span></span>';
   }).join('')
   + '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:var(--dim);opacity:0.85"></span>'
-  + '<span style="font-family:var(--mono);font-size:9.5px;color:var(--muted)">Marge (VE)</span></span>';
+  + '<span style="font-family:var(--mono);font-size:9.5px;color:var(--muted)">Marge (VE)</span></span>'
+  + '<span style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-left:12px">% sous l\'axe = part de la capacité de marge consommée par l\'échéance</span>';
 
   el.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 12px">'
     + '<div style="margin-bottom:6px">'+leg+'</div>' + svg + '</div>';
@@ -5751,7 +5780,7 @@ function renderPilotage(){
       +'<td class="pil-num">'+(TT.ve>0?(TT.jourM*365/TT.ve*100).toFixed(0):'0')+'%</td><td></td></tr>'
     +'</tbody>';
 
-  renderTenorChart(L);
+  renderTenorChart(L, brute100);
 
   var noteEl=document.getElementById('pil-tenor-note');
   if(noteEl){
