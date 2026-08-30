@@ -332,7 +332,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <span style="font-size:11px;color:var(--dim)">&middot; potentiel = rendement × marge ⁄ 12 · tout en USD</span>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-rev-kpi"></div>
-  <div class="pil-wrap" style="margin-bottom:6px"><table class="pil-tbl" id="pil-tenor"></table></div>
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">
+    <button class="btn btn-p" id="tenor-vue-graph" style="padding:3px 10px" onclick="setTenorVue('graph')">Graphique</button>
+    <button class="btn btn-d" id="tenor-vue-table" style="padding:3px 10px" onclick="setTenorVue('table')">Tableau</button>
+    <span style="font-family:var(--mono);font-size:9px;color:var(--dim)">notionnel empilé par sous-jacent + marge (VE) par échéance · montants en USD</span>
+  </div>
+  <div id="pil-tenor-chart" style="margin-bottom:6px"></div>
+  <div class="pil-wrap" style="margin-bottom:6px;display:none" id="pil-tenor-wrap"><table class="pil-tbl" id="pil-tenor"></table></div>
   <div class="pil-note" id="pil-tenor-note" style="margin-bottom:1.5rem"></div>
 
   <!-- ══ 2. ÉTAT DU LIVRE (RISQUE) ══ -->
@@ -4879,6 +4885,111 @@ function renderActionsFacteurs(){
 }
 
 // ═══════════════════════════════════════════════════════════
+//  ÉCHÉANCIER DU LIVRE — histogramme façon « open interest »
+//  Une barre par date d'échéance : notionnel EMPILÉ par sous-jacent
+//  (SPY et QQQ d'une même date se combinent dans la même barre),
+//  plus une barre grise adjacente = marge (VE) immobilisée sur cette
+//  échéance. Une seule échelle $ (même unité). Survol = détail natif.
+//  La vue « Tableau » (tranches de tenor) reste disponible en toggle.
+// ═══════════════════════════════════════════════════════════
+var tenorVue = (function(){ try{ return localStorage.getItem('tenorVue')||'graph'; }catch(e){ return 'graph'; } })();
+function setTenorVue(v){
+  tenorVue = v;
+  try{ localStorage.setItem('tenorVue', v); }catch(e){}
+  ['graph','table'].forEach(function(k){
+    var b=document.getElementById('tenor-vue-'+k);
+    if(b) b.className='btn '+(k===v?'btn-p':'btn-d');
+  });
+  var c=document.getElementById('pil-tenor-chart'), t=document.getElementById('pil-tenor-wrap');
+  if(c) c.style.display = (v==='graph')?'':'none';
+  if(t) t.style.display = (v==='table')?'':'none';
+}
+var TENOR_COL = {QQQ:'var(--qqq)', SPY:'var(--spy)', GLD:'var(--gld)', XEG:'var(--xeg)', NVDA:'var(--blue)', XIU:'#45c4b0'};
+function renderTenorChart(L){
+  var el = document.getElementById('pil-tenor-chart');
+  if(!el) return;
+  setTenorVue(tenorVue);   // applique l'état des boutons/visibilité
+
+  // Agrégation par date d'échéance : notionnel par ticker + VE totale
+  var byExp = {};
+  L.forEach(function(o){
+    if(o.isLong) return;                        // le risque vendu porte l'échéancier
+    var k = o.expiration || '—';
+    if(!byExp[k]) byExp[k] = {tk:{}, ve:0, dte:o.dte, tot:0};
+    byExp[k].tk[o.tk] = (byExp[k].tk[o.tk]||0) + o.notion;
+    byExp[k].tot += o.notion;
+    byExp[k].ve  += o.ve;
+    byExp[k].dte  = o.dte;
+  });
+  var dates = Object.keys(byExp).sort();
+  if(!dates.length){ el.innerHTML=''; return; }
+
+  var maxV = 1;
+  dates.forEach(function(d){ maxV = Math.max(maxV, byExp[d].tot, byExp[d].ve); });
+  var kFmt = function(v){ return v>=1e6 ? (v/1e6).toFixed(2)+'M' : Math.round(v/1000)+'k'; };
+  var dFmt = function(d){ var p=d.split('-'); return p.length===3 ? p[2]+'/'+p[1]+'/'+p[0].slice(2) : d; };
+
+  // Ordre d'empilement FIXE (identité stable, jamais recyclé)
+  var ORDER = ['QQQ','SPY','GLD','XEG','NVDA','XIU'];
+  var present = {};
+  dates.forEach(function(d){ Object.keys(byExp[d].tk).forEach(function(t){ present[t]=1; }); });
+
+  var W=1000, H=250, mL=52, mR=8, mT=20, mB=36;
+  var pw = W-mL-mR, ph = H-mT-mB;
+  var gw = pw/dates.length;                       // largeur d'un groupe (date)
+  var bw = Math.min(gw*0.52, 64);                 // barre notionnel
+  var vw = Math.min(gw*0.20, 22);                 // barre VE
+  var y = function(v){ return mT + ph*(1 - v/maxV); };
+
+  var svg = '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block" role="img" aria-label="Notionnel et marge par échéance">';
+  // grille + axe Y (récessifs)
+  [0.25,0.5,0.75,1].forEach(function(f){
+    var vy=y(maxV*f);
+    svg += '<line x1="'+mL+'" y1="'+vy+'" x2="'+(W-mR)+'" y2="'+vy+'" stroke="var(--border)" stroke-width="1" opacity="0.5"/>';
+    svg += '<text x="'+(mL-6)+'" y="'+(vy+3)+'" text-anchor="end" font-size="9" fill="var(--dim)" font-family="var(--mono)">$'+kFmt(maxV*f)+'</text>';
+  });
+  svg += '<line x1="'+mL+'" y1="'+(mT+ph)+'" x2="'+(W-mR)+'" y2="'+(mT+ph)+'" stroke="var(--border)" stroke-width="1"/>';
+
+  dates.forEach(function(d,i){
+    var g = byExp[d];
+    var x0 = mL + i*gw + (gw-bw-vw-3)/2;
+    // — notionnel empilé par ticker (gaps 2px entre segments, coins arrondis au sommet)
+    var acc = 0;
+    var segs = ORDER.filter(function(t){ return g.tk[t]>0; });
+    segs.forEach(function(t,si){
+      var v=g.tk[t], y1=y(acc+v), h=Math.max(1, y(acc)-y(acc+v)-(si<segs.length-1?2:0));
+      var isTop = (si===segs.length-1);
+      svg += '<rect x="'+x0+'" y="'+y1+'" width="'+bw+'" height="'+h+'" fill="'+(TENOR_COL[t]||'var(--muted)')+'"'
+           + (isTop?' rx="3"':'')+'>'
+           + '<title>'+t+' · '+dFmt(d)+' · $'+fi(Math.round(v))+' notionnel</title></rect>';
+      acc += v;
+    });
+    // — barre VE (marge immobilisée), gris neutre
+    if(g.ve>0.5){
+      svg += '<rect x="'+(x0+bw+3)+'" y="'+y(g.ve)+'" width="'+vw+'" height="'+Math.max(1,(mT+ph)-y(g.ve))+'" fill="var(--dim)" opacity="0.85" rx="3">'
+           + '<title>Marge (VE) · '+dFmt(d)+' · $'+fi(Math.round(g.ve))+'</title></rect>';
+    }
+    // — étiquettes : total au sommet, date + DTE sous l'axe
+    svg += '<text x="'+(x0+bw/2)+'" y="'+(y(g.tot)-5)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--text)" font-family="var(--mono)">$'+kFmt(g.tot)+'</text>';
+    svg += '<text x="'+(mL+i*gw+gw/2)+'" y="'+(mT+ph+13)+'" text-anchor="middle" font-size="9.5" fill="var(--muted)" font-family="var(--mono)">'+dFmt(d)+'</text>';
+    svg += '<text x="'+(mL+i*gw+gw/2)+'" y="'+(mT+ph+25)+'" text-anchor="middle" font-size="9" fill="var(--dim)" font-family="var(--mono)">'+g.dte+'j</text>';
+  });
+  svg += '</svg>';
+
+  // Légende : chips par ticker présent + marge
+  var leg = ORDER.filter(function(t){ return present[t]; }).map(function(t){
+    return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px">'
+      +'<span style="width:9px;height:9px;border-radius:2px;background:'+(TENOR_COL[t]||'var(--muted)')+'"></span>'
+      +'<span style="font-family:var(--mono);font-size:9.5px;color:var(--muted)">'+t+'</span></span>';
+  }).join('')
+  + '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:var(--dim);opacity:0.85"></span>'
+  + '<span style="font-family:var(--mono);font-size:9.5px;color:var(--muted)">Marge (VE)</span></span>';
+
+  el.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 12px">'
+    + '<div style="margin-bottom:6px">'+leg+'</div>' + svg + '</div>';
+}
+
+// ═══════════════════════════════════════════════════════════
 //  CIBLES D'ACHAT — panier d'accumulation SPYM/XIU/XEF/XEC
 //  Compare la répartition RÉELLE de ces 4 titres à la cible
 //  (défaut 40/25/25/10, modifiable, mémorisée par appareil).
@@ -5639,6 +5750,8 @@ function renderPilotage(){
       +'<td class="pil-num" style="color:var(--green)">$'+fi(Math.round(revMois))+'</td>'
       +'<td class="pil-num">'+(TT.ve>0?(TT.jourM*365/TT.ve*100).toFixed(0):'0')+'%</td><td></td></tr>'
     +'</tbody>';
+
+  renderTenorChart(L);
 
   var noteEl=document.getElementById('pil-tenor-note');
   if(noteEl){
