@@ -4910,16 +4910,24 @@ function renderTenorChart(L, capBrute){
   if(!el) return;
   setTenorVue(tenorVue);   // applique l'état des boutons/visibilité
 
-  // Agrégation par date d'échéance : notionnel par ticker + VE totale
-  var byExp = {};
+  // Agrégation par date d'échéance : par ticker {notionnel, VE, prime/jour}
+  // (la prime ne compte que si la marge est immobilisée — même règle que le tableau)
+  var byExp = {}, tkTot = {}, grandTot = 0;
   L.forEach(function(o){
     if(o.isLong) return;                        // le risque vendu porte l'échéancier
     var k = o.expiration || '—';
     if(!byExp[k]) byExp[k] = {tk:{}, ve:0, dte:o.dte, tot:0};
-    byExp[k].tk[o.tk] = (byExp[k].tk[o.tk]||0) + o.notion;
+    var sg = byExp[k].tk[o.tk] || (byExp[k].tk[o.tk] = {notion:0, ve:0, jour:0, primeS:0, pnlS:0});
+    sg.notion += o.notion;
+    sg.ve     += o.ve;
+    sg.jour   += (o.ve>0 ? o.jour : 0);
+    sg.primeS += o.prime*100*o.qty*o.cvt;                 // prime encaissée (USD)
+    sg.pnlS   += (o.prime-o.px)*100*o.qty*o.cvt;          // profit à ce jour (short : prime − rachat)
     byExp[k].tot += o.notion;
     byExp[k].ve  += o.ve;
     byExp[k].dte  = o.dte;
+    tkTot[o.tk] = (tkTot[o.tk]||0) + o.notion;
+    grandTot += o.notion;
   });
   var dates = Object.keys(byExp).sort();
   if(!dates.length){ el.innerHTML=''; return; }
@@ -4937,7 +4945,7 @@ function renderTenorChart(L, capBrute){
   // ÉCHELLE DE TEMPS RÉELLE : x proportionnel au DTE (aujourd'hui = bord gauche).
   // Les échéances rapprochées gardent un écart minimal lisible (dodge léger) —
   // la position vraie reste marquée par un petit repère sur l'axe.
-  var W=1000, H=268, mL=52, mR=14, mT=20, mB=50;
+  var W=1000, H=330, mL=52, mR=14, mT=20, mB=50;
   var pw = W-mL-mR, ph = H-mT-mB;
   var span = maxDte*1.06;
   var bw = 30, vw = 11, gap = 3;                  // barre notionnel + barre VE
@@ -4980,14 +4988,41 @@ function renderTenorChart(L, capBrute){
     svg += '<line x1="'+tx+'" y1="'+(mT+ph)+'" x2="'+tx+'" y2="'+(mT+ph+4)+'" stroke="var(--muted)" stroke-width="2"/>';
     if(Math.abs(tx-cx)>4) svg += '<line x1="'+tx+'" y1="'+(mT+ph+4)+'" x2="'+cx+'" y2="'+(mT+ph+9)+'" stroke="var(--dim)" stroke-width="1"/>';
     // — notionnel empilé par ticker (gaps 2px, coins arrondis au sommet)
+    //   + rendement %/an sur marge INSCRIT dans le segment quand il est assez
+    //   haut pour rester lisible ; sinon il vit dans l'infobulle. Un call
+    //   couvert (VE=0) n'a pas de rendement sur marge -> infobulle « couvert ».
     var acc = 0;
-    var segs = ORDER.filter(function(t){ return g.tk[t]>0; });
+    var segs = ORDER.filter(function(t){ return g.tk[t] && g.tk[t].notion>0; });
     segs.forEach(function(t,si){
-      var v=g.tk[t], y1=y(acc+v), h=Math.max(1, y(acc)-y(acc+v)-(si<segs.length-1?2:0));
+      var sg=g.tk[t], v=sg.notion, y1=y(acc+v), h=Math.max(1, y(acc)-y(acc+v)-(si<segs.length-1?2:0));
       var isTop = (si===segs.length-1);
-      svg += '<rect x="'+x0+'" y="'+y1+'" width="'+bw+'" height="'+h+'" fill="'+(TENOR_COL[t]||'var(--muted)')+'"'
+      var rd = sg.ve>0 ? sg.jour*365/sg.ve*100 : null;
+      var pf = sg.primeS>0 ? sg.pnlS/sg.primeS*100 : null;   // % de la prime capturé à ce jour
+      var tip = t+' · '+dFmt(d)+' · $'+fi(Math.round(v))+' notionnel · '
+              + (rd!==null ? 'rend. '+rd.toFixed(0)+'%/an sur $'+fi(Math.round(sg.ve))+' de marge' : 'couvert — aucune marge')
+              + (pf!==null ? ' · profit '+(pf>=0?'+':'')+pf.toFixed(0)+'% de la prime ($'+fi(Math.round(sg.pnlS))+')' : '');
+      // Le bloc EST sa jauge de profit : fond = teinte pâle du ticker, remplissage
+      // pleine couleur de gauche à droite = % de la prime capturé (0–100 %).
+      // Horizontal exprès : la hauteur encode déjà les dollars, on n'y touche pas.
+      var pfC = (pf===null) ? null : Math.max(0, Math.min(100, pf));
+      var col = TENOR_COL[t]||'var(--muted)';
+      svg += '<rect x="'+x0+'" y="'+y1+'" width="'+bw+'" height="'+h+'" fill="'+col+'" opacity="0.28"'
            + (isTop?' rx="3"':'')+'>'
-           + '<title>'+t+' · '+dFmt(d)+' · $'+fi(Math.round(v))+' notionnel</title></rect>';
+           + '<title>'+tip+'</title></rect>';
+      if(pfC!==null && pfC>0){
+        svg += '<rect x="'+x0+'" y="'+y1+'" width="'+(bw*pfC/100).toFixed(1)+'" height="'+h+'" fill="'+col+'"'
+             + (isTop?' rx="3"':'')+' pointer-events="none"/>';
+      }
+      if(pf!==null && pf<0){   // position en perte : liseré rouge sur le bord gauche
+        svg += '<rect x="'+x0+'" y="'+y1+'" width="2.5" height="'+h+'" fill="var(--red)" pointer-events="none"/>';
+      }
+      // Un seul chiffre inscrit : le rendement %/an (contour sombre -> lisible
+      // sur la partie pâle comme sur la partie pleine).
+      if(rd!==null && h>=14){
+        svg += '<text x="'+(x0+bw/2)+'" y="'+(y1+h/2+3.5)+'" text-anchor="middle" font-size="9" font-weight="700"'
+             + ' fill="#f2f4f8" stroke="#0a0c12" stroke-width="2" paint-order="stroke" stroke-linejoin="round"'
+             + ' font-family="var(--mono)" pointer-events="none">'+rd.toFixed(0)+'%</text>';
+      }
       acc += v;
     });
     // — barre VE (marge immobilisée), gris neutre
@@ -5004,18 +5039,42 @@ function renderTenorChart(L, capBrute){
   });
   svg += '</svg>';
 
-  // Légende : chips par ticker présent + marge
-  var leg = ORDER.filter(function(t){ return present[t]; }).map(function(t){
-    return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px">'
-      +'<span style="width:9px;height:9px;border-radius:2px;background:'+(TENOR_COL[t]||'var(--muted)')+'"></span>'
-      +'<span style="font-family:var(--mono);font-size:9.5px;color:var(--muted)">'+t+'</span></span>';
-  }).join('')
-  + '<span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:2px;background:var(--dim);opacity:0.85"></span>'
-  + '<span style="font-family:var(--mono);font-size:9.5px;color:var(--muted)">Marge (VE)</span></span>'
-  + '<span style="font-family:var(--mono);font-size:9px;color:var(--dim);margin-left:12px">% sous l\'axe = part de la capacité de marge consommée par l\'échéance</span>';
+  // Panneau de droite : légende ENRICHIE = % du notionnel total par ticker
+  // (la colonne « % not. » du Facteur de risque, rapatriée ici), triée
+  // du plus gros au plus petit. La couleur reste l'identité du ticker.
+  var tkList = ORDER.filter(function(t){ return present[t]; })
+    .sort(function(a,b){ return (tkTot[b]||0)-(tkTot[a]||0); });
+  var maxPct = 1;
+  tkList.forEach(function(t){ maxPct = Math.max(maxPct, grandTot>0 ? tkTot[t]/grandTot*100 : 0); });
+  var panel = '<div style="width:150px;flex:none;display:flex;flex-direction:column;gap:7px;padding-top:14px">'
+    + '<div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">% du notionnel</div>'
+    + tkList.map(function(t){
+        var pct = grandTot>0 ? tkTot[t]/grandTot*100 : 0;
+        return '<div>'
+          +'<div style="display:flex;align-items:center;gap:5px">'
+            +'<span style="width:9px;height:9px;border-radius:2px;flex:none;background:'+(TENOR_COL[t]||'var(--muted)')+'"></span>'
+            +'<span style="font-family:var(--mono);font-size:10px;color:var(--text);font-weight:700">'+t+'</span>'
+            +'<span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text);margin-left:auto">'+pct.toFixed(0)+'%</span>'
+          +'</div>'
+          +'<div style="display:flex;align-items:center;gap:5px;margin-top:2px">'
+            +'<div style="flex:1;height:4px;background:var(--s2);border-radius:2px;overflow:hidden">'
+              +'<div style="height:100%;width:'+Math.min(100,pct/maxPct*100).toFixed(0)+'%;background:'+(TENOR_COL[t]||'var(--muted)')+';border-radius:2px"></div>'
+            +'</div>'
+            +'<span style="font-family:var(--mono);font-size:8.5px;color:var(--dim)">$'+kFmt(tkTot[t])+'</span>'
+          +'</div>'
+        +'</div>';
+      }).join('')
+    + '<div style="display:flex;align-items:center;gap:5px;margin-top:4px;padding-top:7px;border-top:1px solid var(--border)">'
+      +'<span style="width:9px;height:9px;border-radius:2px;flex:none;background:var(--dim);opacity:0.85"></span>'
+      +'<span style="font-family:var(--mono);font-size:9px;color:var(--muted)">Marge (VE)</span></div>'
+    + '<div style="font-family:var(--mono);font-size:8px;color:var(--dim);line-height:1.5">blocs : remplissage gauche→droite = % de prime capturé (liseré rouge = perte) · chiffre = rend. %/an sur marge · % sous l\'axe = part de la capacité de marge</div>'
+    + '</div>';
 
   el.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 12px">'
-    + '<div style="margin-bottom:6px">'+leg+'</div>' + svg + '</div>';
+    + '<div style="display:flex;gap:12px;align-items:stretch">'
+    +   '<div style="flex:1;min-width:0">' + svg + '</div>'
+    +   panel
+    + '</div></div>';
 }
 
 // ═══════════════════════════════════════════════════════════
