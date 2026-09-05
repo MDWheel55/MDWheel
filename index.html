@@ -331,7 +331,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <input class="pil-inp" id="pil-mdep" type="number" step="1000" min="0" placeholder="plafond" onchange="renderPilotage()" style="width:92px">
     <span style="font-size:11px;color:var(--dim)">&middot; potentiel = rendement × marge ⁄ 12 · tout en USD</span>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-rev-kpi"></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:1.5rem" id="pil-rev-kpi"></div>
+
+  <!-- ══ 2. ÉTAT DU LIVRE (RISQUE) ══ -->
+  <div class="sec">État du livre &middot; limites, exposition et delta-équivalent</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-top-kpi"></div>
+  <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-gauges"></table></div>
+
+  <!-- ══ 2b. ÉCHÉANCIER DU LIVRE (GRAPHIQUE) ══ -->
+  <div class="sec">Échéancier du livre &middot; notionnel, marge, rendement et profit par échéance</div>
   <div style="display:flex;gap:6px;align-items:center;margin-bottom:7px">
     <button class="btn btn-p" id="tenor-vue-graph" style="padding:3px 10px" onclick="setTenorVue('graph')">Graphique</button>
     <button class="btn btn-d" id="tenor-vue-table" style="padding:3px 10px" onclick="setTenorVue('table')">Tableau</button>
@@ -340,11 +348,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <div id="pil-tenor-chart" style="margin-bottom:6px"></div>
   <div class="pil-wrap" style="margin-bottom:6px;display:none" id="pil-tenor-wrap"><table class="pil-tbl" id="pil-tenor"></table></div>
   <div class="pil-note" id="pil-tenor-note" style="margin-bottom:1.5rem"></div>
-
-  <!-- ══ 2. ÉTAT DU LIVRE (RISQUE) ══ -->
-  <div class="sec">État du livre &middot; limites, exposition et delta-équivalent</div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-top-kpi"></div>
-  <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-gauges"></table></div>
 
   <!-- ══ 3. EXPOSITION PAR SOUS-JACENT — retirée de l'UI : le panneau de droite
        de l'échéancier (% notionnel + delta-équiv + contrats) la remplace.
@@ -4951,7 +4954,7 @@ function renderTenorChart(L, capBrute){
   // ÉCHELLE DE TEMPS RÉELLE : x proportionnel au DTE (aujourd'hui = bord gauche).
   // Les échéances rapprochées gardent un écart minimal lisible (dodge léger) —
   // la position vraie reste marquée par un petit repère sur l'axe.
-  var W=1000, H=330, mL=52, mR=14, mT=20, mB=50;
+  var W=1000, H=430, mL=52, mR=14, mT=18, mB=64;
   var pw = W-mL-mR, ph = H-mT-mB;
   var span = maxDte*1.06;
   var bw = 30, vw = 11, gap = 3;                  // barre notionnel + barre VE
@@ -5016,8 +5019,10 @@ function renderTenorChart(L, capBrute){
            + (isTop?' rx="3"':'')+'>'
            + '<title>'+tip+'</title></rect>';
       if(pfC!==null && pfC>0){
-        svg += '<rect x="'+x0+'" y="'+y1+'" width="'+(bw*pfC/100).toFixed(1)+'" height="'+h+'" fill="'+col+'"'
-             + (isTop?' rx="3"':'')+' pointer-events="none"/>';
+        // Remplissage DE BAS EN HAUT dans le segment : la jauge monte avec le profit.
+        var fh = h*pfC/100;
+        svg += '<rect x="'+x0+'" y="'+(y1+h-fh).toFixed(1)+'" width="'+bw+'" height="'+fh.toFixed(1)+'" fill="'+col+'"'
+             + ((isTop && pfC>=99)?' rx="3"':'')+' pointer-events="none"/>';
       }
       if(pf!==null && pf<0){   // position en perte : liseré rouge sur le bord gauche
         svg += '<rect x="'+x0+'" y="'+y1+'" width="2.5" height="'+h+'" fill="var(--red)" pointer-events="none"/>';
@@ -5038,10 +5043,10 @@ function renderTenorChart(L, capBrute){
            + '<title>Marge (VE) · '+dFmt(d)+' · $'+fi(Math.round(g.ve))+' · '+pctM.toFixed(1)+'% de la capacité</title></rect>';
     }
     // — étiquettes : total au sommet ; date, DTE et % marge sous l'axe
-    svg += '<text x="'+(x0+bw/2)+'" y="'+(y(g.tot)-5)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--text)" font-family="var(--mono)">$'+kFmt(g.tot)+'</text>';
     svg += '<text x="'+cx+'" y="'+(mT+ph+19)+'" text-anchor="middle" font-size="9.5" fill="var(--muted)" font-family="var(--mono)">'+dFmt(d)+'</text>';
     svg += '<text x="'+cx+'" y="'+(mT+ph+30)+'" text-anchor="middle" font-size="9" fill="var(--dim)" font-family="var(--mono)">'+g.dte+'j</text>';
     svg += '<text x="'+cx+'" y="'+(mT+ph+42)+'" text-anchor="middle" font-size="9" font-weight="700" fill="'+(pctM>=20?'var(--red)':pctM>=10?'var(--amber)':'var(--green)')+'" font-family="var(--mono)">'+(g.ve>0.5?pctM.toFixed(1)+'%':'—')+'</text>';
+    svg += '<text x="'+cx+'" y="'+(mT+ph+57)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--text)" font-family="var(--mono)">$'+kFmt(g.tot)+'</text>';
   });
   svg += '</svg>';
 
@@ -5077,7 +5082,7 @@ function renderTenorChart(L, capBrute){
     + '<div style="display:flex;align-items:center;gap:5px;margin-top:4px;padding-top:7px;border-top:1px solid var(--border)">'
       +'<span style="width:9px;height:9px;border-radius:2px;flex:none;background:var(--dim);opacity:0.85"></span>'
       +'<span style="font-family:var(--mono);font-size:9px;color:var(--muted)">Marge (VE)</span></div>'
-    + '<div style="font-family:var(--mono);font-size:8px;color:var(--dim);line-height:1.5">blocs : remplissage gauche→droite = % de prime capturé (liseré rouge = perte) · chiffre = rend. %/an sur marge · % sous l\'axe = part de la capacité de marge</div>'
+    + '<div style="font-family:var(--mono);font-size:8px;color:var(--dim);line-height:1.5">blocs : remplissage bas→haut = % de prime capturé (liseré rouge = perte) · chiffre = rend. %/an sur la marge immobilisée · sous l\'axe : % de la capacité de marge puis notionnel total</div>'
     + '</div>';
 
   el.innerHTML = '<div style="background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 12px">'
@@ -5815,9 +5820,8 @@ function renderPilotage(){
      s:'du livre · sur marge déployée', c:'var(--green)'},
     {l:'Potentiel réaliste /mois', v:'$'+fi(Math.round(potMois)),
      s:rdtC.toFixed(0)+'%/an × $'+fi(Math.round(mDep))+' marge déployée', c:'var(--qqq)'},
-    {l:(ecart>0?'Écart à combler':'Objectif atteint'),
-     v:(ecart>0?'$'+fi(Math.round(ecart)):'✓ +$'+fi(Math.round(-ecart))),
-     s:pctObj.toFixed(0)+'% de l\'objectif', c:ecart>0?'var(--red)':'var(--green)'},
+    // (tuile « Écart à combler » retirée sur demande — l'info reste dans la note
+    //  sous l'échéancier et dans « Réel /mois » vs l'objectif saisi)
     {l:'Thêta du livre', v:money$(a.theta)+' /j',
      s:'~'+money$(a.theta*JPM)+' /mois de décroissance', c:a.theta>=0?'var(--green)':'var(--red)'}
   ].map(function(i){ return '<div class="pil-kpi"><div class="pil-kpi-l">'+i.l+'</div>'
