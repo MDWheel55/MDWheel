@@ -346,9 +346,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:7px;margin-bottom:10px" id="pil-top-kpi"></div>
   <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-gauges"></table></div>
 
-  <!-- ══ 3. EXPOSITION PAR SOUS-JACENT ══ -->
+  <!-- ══ 3. EXPOSITION PAR SOUS-JACENT — retirée de l'UI : le panneau de droite
+       de l'échéancier (% notionnel + delta-équiv + contrats) la remplace.
+       Remets les 2 lignes ci-dessous pour la faire revenir. ══
   <div class="sec">Facteur de risque &middot; exposition par sous-jacent</div>
-  <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-facteurs"></table></div>
+  <div class="pil-wrap" style="margin-bottom:1.5rem"><table class="pil-tbl" id="pil-facteurs"></table></div> -->
 
   <!-- ══ 3b. POSITIONS ══ -->
   <div class="sec">Positions &middot; triées par urgence puis rendement sur marge</div>
@@ -4912,8 +4914,12 @@ function renderTenorChart(L, capBrute){
 
   // Agrégation par date d'échéance : par ticker {notionnel, VE, prime/jour}
   // (la prime ne compte que si la marge est immobilisée — même règle que le tableau)
-  var byExp = {}, tkTot = {}, grandTot = 0;
+  var byExp = {}, tkTot = {}, grandTot = 0, tkDelta = {}, tkCtr = {};
   L.forEach(function(o){
+    // Delta-équiv : TOUT le livre (longs inclus — un LEAPS compense ses calls vendus).
+    tkDelta[o.tk] = (tkDelta[o.tk]||0) + o.deltaEq;
+    // Contrats : puts vendus (ceux qui immobilisent la marge), même règle que l'ancienne table.
+    if(!o.isLong && !o.isCall) tkCtr[o.tk] = (tkCtr[o.tk]||0) + o.qty;
     if(o.isLong) return;                        // le risque vendu porte l'échéancier
     var k = o.expiration || '—';
     if(!byExp[k]) byExp[k] = {tk:{}, ve:0, dte:o.dte, tot:0};
@@ -5061,6 +5067,10 @@ function renderTenorChart(L, capBrute){
               +'<div style="height:100%;width:'+Math.min(100,pct/maxPct*100).toFixed(0)+'%;background:'+(TENOR_COL[t]||'var(--muted)')+';border-radius:2px"></div>'
             +'</div>'
             +'<span style="font-family:var(--mono);font-size:8.5px;color:var(--dim)">$'+kFmt(tkTot[t])+'</span>'
+          +'</div>'
+          +'<div style="font-family:var(--mono);font-size:8.5px;color:var(--muted);margin-top:2px">'
+            +'Δ $'+fi(Math.round(Math.abs(tkDelta[t]||0)))
+            +(tkCtr[t]>0 ? ' <span style="color:var(--dim)">· '+tkCtr[t]+' puts</span>' : ' <span style="color:var(--dim)">· 0 put</span>')
           +'</div>'
         +'</div>';
       }).join('')
@@ -5857,7 +5867,8 @@ function renderPilotage(){
   var tkCls=function(t){ return t==='QQQ'?'tq':t==='SPY'?'ts':t==='GLD'?'tg':t==='XEG'?'tx':'tn'; };
   var tkCol=function(t){ return t==='QQQ'?'var(--qqq)':t==='SPY'?'var(--spy)':t==='GLD'?'var(--gld)':t==='XEG'?'var(--xeg)':'var(--blue)'; };
   var cCount=function(t){ return L.reduce(function(s,o){ return s+((o.tk===t && !o.isLong && !o.isCall)?o.qty:0); },0); };  // puts vendus (short) — ceux qui immobilisent la marge
-  document.getElementById('pil-facteurs').innerHTML =
+  var facEl = document.getElementById('pil-facteurs');   // table retirée de l'UI (le panneau de l'échéancier la remplace)
+  if(facEl) facEl.innerHTML =
     '<thead><tr><th>Sous-jacent</th><th class="pil-num">Puts vendus</th><th class="pil-num">Notionnel</th><th class="pil-num">% not.</th>'
     +'<th class="pil-num">Delta-équiv</th><th class="pil-num">% delta</th><th style="width:24%"></th></tr></thead><tbody>'
     + fk.map(function(k){
