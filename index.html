@@ -4926,12 +4926,16 @@ function renderTenorChart(L, capBrute){
     if(o.isLong) return;                        // le risque vendu porte l'échéancier
     var k = o.expiration || '—';
     if(!byExp[k]) byExp[k] = {tk:{}, ve:0, dte:o.dte, tot:0};
-    var sg = byExp[k].tk[o.tk] || (byExp[k].tk[o.tk] = {notion:0, ve:0, jour:0, primeS:0, pnlS:0});
+    var sg = byExp[k].tk[o.tk] || (byExp[k].tk[o.tk] = {notion:0, ve:0, jour:0, primeS:0, pnlS:0, det:[]});
     sg.notion += o.notion;
     sg.ve     += o.ve;
     sg.jour   += (o.ve>0 ? o.jour : 0);
     sg.primeS += o.prime*100*o.qty*o.cvt;                 // prime encaissée (USD)
     sg.pnlS   += (o.prime-o.px)*100*o.qty*o.cvt;          // profit à ce jour (short : prime − rachat)
+    // détail par position (le % agrégé pondère par la prime : un perdant peut
+    // être dilué par un gagnant — l'infobulle garde la trace de chacun)
+    var cpt = (o.prime>0) ? (1-o.px/o.prime)*100 : null;
+    if(cpt!==null) sg.det.push(o.K+(o.isCall?'C':'P')+' '+(cpt>=0?'+':'−')+Math.abs(cpt).toFixed(0)+'%');
     byExp[k].tot += o.notion;
     byExp[k].ve  += o.ve;
     byExp[k].dte  = o.dte;
@@ -4954,7 +4958,7 @@ function renderTenorChart(L, capBrute){
   // ÉCHELLE DE TEMPS RÉELLE : x proportionnel au DTE (aujourd'hui = bord gauche).
   // Les échéances rapprochées gardent un écart minimal lisible (dodge léger) —
   // la position vraie reste marquée par un petit repère sur l'axe.
-  var W=1000, H=430, mL=52, mR=14, mT=18, mB=64;
+  var W=1000, H=444, mL=52, mR=14, mT=18, mB=78;
   var pw = W-mL-mR, ph = H-mT-mB;
   var span = maxDte*1.06;
   var bw = 30, vw = 11, gap = 3;                  // barre notionnel + barre VE
@@ -5009,7 +5013,8 @@ function renderTenorChart(L, capBrute){
       var pf = sg.primeS>0 ? sg.pnlS/sg.primeS*100 : null;   // % de la prime capturé à ce jour
       var tip = t+' · '+dFmt(d)+' · $'+fi(Math.round(v))+' notionnel · '
               + (rd!==null ? 'rend. '+rd.toFixed(0)+'%/an sur $'+fi(Math.round(sg.ve))+' de marge' : 'couvert — aucune marge')
-              + (pf!==null ? ' · profit '+(pf>=0?'+':'')+pf.toFixed(0)+'% de la prime ($'+fi(Math.round(sg.pnlS))+')' : '');
+              + (pf!==null ? ' · profit '+(pf>=0?'+':'')+pf.toFixed(0)+'% de la prime ($'+fi(Math.round(sg.pnlS))+')' : '')
+              + (sg.det.length>1 ? ' · détail : '+sg.det.join(' · ') : '');
       // Le bloc EST sa jauge de profit : fond = teinte pâle du ticker, remplissage
       // pleine couleur de gauche à droite = % de la prime capturé (0–100 %).
       // Horizontal exprès : la hauteur encode déjà les dollars, on n'y touche pas.
@@ -5046,10 +5051,14 @@ function renderTenorChart(L, capBrute){
     svg += '<text x="'+cx+'" y="'+(mT+ph+19)+'" text-anchor="middle" font-size="9.5" fill="var(--muted)" font-family="var(--mono)">'+dFmt(d)+'</text>';
     svg += '<text x="'+cx+'" y="'+(mT+ph+30)+'" text-anchor="middle" font-size="9" fill="var(--dim)" font-family="var(--mono)">'+g.dte+'j</text>';
     svg += '<text x="'+cx+'" y="'+(mT+ph+42)+'" text-anchor="middle" font-size="9" font-weight="700" fill="'+(pctM>=20?'var(--red)':pctM>=10?'var(--amber)':'var(--green)')+'" font-family="var(--mono)">'+(g.ve>0.5?pctM.toFixed(1)+'%':'—')+'</text>';
-    // Dernière ligne : notionnel + rendement %/an de l'échéance (prime/an ÷ VE)
+    // Dernière ligne : notionnel + rendement %/an de l'échéance (prime/an ÷ VE).
+    // QUINCONCE : quand deux échéances rapprochées se serrent (dodge), cette
+    // ligne — la plus large — alterne entre deux hauteurs pour ne pas se chevaucher.
     var jourD = 0; Object.keys(g.tk).forEach(function(t){ jourD += g.tk[t].jour; });
     var rdD = g.ve>0 ? jourD*365/g.ve*100 : null;
-    svg += '<text x="'+cx+'" y="'+(mT+ph+57)+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--text)" font-family="var(--mono)">$'+kFmt(g.tot)
+    var serre = (i>0 && cx-ctr[i-1]<78) || (i<ctr.length-1 && ctr[i+1]-cx<78);
+    var y4 = mT+ph + ((serre && i%2===1) ? 71 : 57);
+    svg += '<text x="'+cx+'" y="'+y4+'" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--text)" font-family="var(--mono)">$'+kFmt(g.tot)
          + (rdD!==null ? ' <tspan fill="'+(rdD>=15?'var(--green)':'var(--amber)')+'">· '+rdD.toFixed(0)+'%</tspan>' : '')
          + '</text>';
   });
