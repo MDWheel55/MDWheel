@@ -2923,7 +2923,16 @@ async function fermerPos(id) {
     '3 = Assignation — je suis assigné(e)\n\n' +
     'Entrez 1, 2 ou 3:', '1');
   if (typeFerm === null) return; // annulé
-  const contr = Math.abs(parseInt(p.contrats)||1);
+  const contrPos = Math.abs(parseInt(p.contrats)||1);
+  // Fermeture PARTIELLE possible pour rachat (1) et assignation (3) : on demande
+  // combien de contrats. L'expiration (2) clôt toujours tout ce qui reste.
+  let contr = contrPos;
+  if (typeFerm === '1' || typeFerm === '3') {
+    const contrStr = prompt('Combien de contrats fermer ?  (position : ' + contrPos + ')', String(contrPos));
+    if (contrStr === null) return;
+    contr = Math.abs(parseInt(contrStr) || 0);
+    if (!(contr > 0) || contr > contrPos) { alert('Quantité invalide (1 à ' + contrPos + ') — fermeture annulée.'); return; }
+  }
   const prime = parseFloat(p.prime);
   const closDate = new Date().toISOString().slice(0,10);
   // Frais de fermeture (par défaut 5$, sauf expiration = 0$ car aucune transaction)
@@ -2940,7 +2949,7 @@ async function fermerPos(id) {
     if (!confirm('Marquer comme expirée? Gain réalisé: $' + fi(pnl) + ' (prime complète, aucun frais)')) return;
     await gsApi({action:'saveTrade', date:p.expiration||closDate,
       operation:'EXP', ticker:p.ticker, type:p.type, strike:p.strike, expiration:p.expiration,
-      contrats:p.contrats, prix:'0', frais:0, occ:p.occ});
+      contrats:contr, prix:'0', frais:0, occ:p.occ});
     await loadAll();
     setSyncStatus(true, '✓ Expirée — Gain: $' + fi(pnl));
     return;
@@ -2952,7 +2961,7 @@ async function fermerPos(id) {
                  ' ajustera le coût des actions (pas de gain en capital sur l\'option). Frais: $' + fi(frais))) return;
     await gsApi({action:'saveTrade', date:closDate,
       operation:'EXP', ticker:p.ticker, type:p.type, strike:p.strike, expiration:p.expiration,
-      contrats:p.contrats, prix:'0', frais:0, occ:p.occ});
+      contrats:contr, prix:'0', frais:0, occ:p.occ});
     await loadAll();
     alert('Option clôturée (assignation).\n\nÀ FAIRE : saisis la transaction d\'actions correspondante ('
       + (contr*100) + ' actions de ' + p.ticker + ' @ ' + p.strike + '$) dans l\'onglet Actions, '
@@ -2977,10 +2986,10 @@ async function fermerPos(id) {
   const pnl = Math.round(pnlBrut - frais);
   const coutClot = Math.round(prixClot * 100 * contr);
   const libCout = isLong ? 'Produit de vente' : 'Cout de rachat';
-  if (!confirm((isLong ? 'Vendre (STC)' : 'Racheter (BTC)') + ' a $' + prixClot.toFixed(2) + ' (' + pc + '% de profit) ?  P&L net frais deduits : $' + fi(pnl) + '  ·  ' + libCout + ' : $' + fi(coutClot) + ' ' + dev)) return;
+  if (!confirm((isLong ? 'Vendre (STC)' : 'Racheter (BTC)') + ' ' + contr + '/' + contrPos + ' contrat(s) a $' + prixClot.toFixed(2) + ' (' + pc + '% de profit) ?  P&L net frais deduits : $' + fi(pnl) + '  ·  ' + libCout + ' : $' + fi(coutClot) + ' ' + dev)) return;
   await gsApi({action:'saveTrade', date:closDate, operation:closeOp, ticker:p.ticker, type:p.type,
     strike:p.strike, expiration:p.expiration,
-    contrats:p.contrats, prix:prixClot, frais:frais, occ:p.occ});
+    contrats:contr, prix:prixClot, frais:frais, occ:p.occ});
   await loadAll();
   setSyncStatus(true, '✓ ' + (isLong ? 'Vendu (STC)' : 'Rachete (BTC)') + ' — P&L: $' + fi(pnl));
 }
