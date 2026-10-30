@@ -595,7 +595,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <div id="perf-chart-container" style="flex:1 1 400px;min-width:300px;position:relative;background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:1rem;min-height:220px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <span style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em">PERFORMANCE DU PORTEFEUILLE</span>
-        <div style="display:flex;gap:6px;align-items:center">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <div style="display:flex;gap:3px;border-right:1px solid var(--border);padding-right:6px;margin-right:2px">
+            <button class="btn btn-p" id="perf-s-total" style="padding:3px 10px;font-size:10px" onclick="setPerfSerie('total')">Total</button>
+            <button class="btn btn-d" id="perf-s-corpo" style="padding:3px 10px;font-size:10px" onclick="setPerfSerie('corpo')">Corpo</button>
+            <button class="btn btn-d" id="perf-s-celi"  style="padding:3px 10px;font-size:10px" onclick="setPerfSerie('celi')">CELI</button>
+          </div>
           <button class="btn btn-d" id="perf-v-sem"   style="padding:3px 10px;font-size:10px" onclick="setPerfView('semaine')">Semaine</button>
           <button class="btn btn-p" id="perf-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('mois')">Mois</button>
           <button class="btn btn-d" id="perf-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPerfView('annee')">Année</button>
@@ -641,7 +646,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     <div style="flex:2;min-width:260px">
       <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.12em;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--border)">COMPTE CELI · DÉTAIL</div>
 
-      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:5px">POSITIONS</div>
+      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:5px">ACTIONS</div>
       <div id="celi-positions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:14px"></div>
 
       <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:5px">CASH</div>
@@ -713,17 +718,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </table>
   </div>
 
-  <!-- POSITIONS CELI reconstruites -->
+  <!-- POSITIONS CELI reconstruites — cartes comme onglet Actions -->
   <div class="sec">POSITIONS CELI (RECONSTRUITES)</div>
-  <div class="pwrap" style="margin-bottom:1rem">
-    <table class="ptbl">
-      <thead><tr>
-        <th>SYMBOLE</th><th>DEV</th><th style="text-align:right">QTÉ</th>
-        <th style="text-align:right">COÛT MOY.</th><th style="text-align:right">COÛT TOTAL</th>
-        <th style="text-align:right">VAL. MKT</th><th style="text-align:right">P&L</th>
-      </tr></thead>
-      <tbody id="celi-pos-body"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem">Actualisez pour charger</td></tr></tbody>
-    </table>
+  <div id="celi-pos-cards" style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:1.5rem">
+    <div style="color:var(--muted);font-size:11px;font-family:var(--mono);padding:0.5rem">Actualisez pour charger</div>
   </div>
 
 </div>
@@ -4577,12 +4575,22 @@ async function loadFluxFromSheets(cpt) {
 
 let perfSnapshots = []; // [{date, valeurUSD, valeurCAD, margePct, fx}]
 let perfView = 'mois';
+let perfSerie = 'total'; // 'total' | 'corpo' | 'celi'
 
 function setPerfView(v) {
   perfView = v;
   ['semaine','mois','annee','tout'].forEach(k => {
     const el = document.getElementById('perf-v-'+k);
     if (el) el.className = 'btn '+(v===k?'btn-p':'btn-d');
+  });
+  renderPerfChart();
+}
+
+function setPerfSerie(s) {
+  perfSerie = s;
+  ['total','corpo','celi'].forEach(k => {
+    const el = document.getElementById('perf-s-'+k);
+    if (el) el.className = 'btn '+(s===k?'btn-p':'btn-d');
   });
   renderPerfChart();
 }
@@ -4651,7 +4659,24 @@ function renderPerfChart() {
     tout:    '2000-01-01',
   };
   const cutDate = cuts[perfView] || cuts.mois;
-  const data = perfSnapshots.filter(s => s.date >= cutDate);
+  const rawData = perfSnapshots.filter(s => s.date >= cutDate);
+
+  // Choisir la série selon perfSerie
+  // Les snapshots n'ont que valeurCAD (corpo). Pour total et celi on estime avec _celiTotalCAD courant.
+  // Quand le snapshot a un champ celiCAD on l'utilise, sinon on approxime avec la valeur courante.
+  const celiNow = window._celiTotalCAD || 0;
+  const data = rawData.map(s => {
+    // Si le snapshot inclut les deux champs séparés (à venir), on les utilise.
+    // Sinon fallback : corpo=valeurCAD, celi=celiNow (constant sur la période)
+    const corpoCAD = s.valeurCAD || 0;
+    const celiCAD  = s.celiCAD != null ? s.celiCAD : celiNow;
+    const totalCAD = corpoCAD + celiCAD;
+    let v;
+    if (perfSerie === 'celi')  v = celiCAD;
+    else if (perfSerie === 'corpo') v = corpoCAD;
+    else v = totalCAD;
+    return { date: s.date, valeurCAD: v };
+  });
 
   if (data.length < 2) {
     if (noData) noData.style.display = 'flex';
@@ -5035,12 +5060,19 @@ function renderCeli(fx) {
   var totEl = document.getElementById('celi-totaux');
   if (totEl) totEl.innerHTML = '';
 
-  // ── POSITIONS CELI : une tile par position ──
+  // ── POSITIONS CELI : tiles style corpo ──
   var posEl = document.getElementById('celi-positions');
   if (posEl) {
     if (!celiPositions.length) {
       posEl.innerHTML = '<div style="color:var(--muted);font-size:11px;font-family:var(--mono)">Aucune position — actualisez d\'abord</div>';
     } else {
+      // Calculer total positions pour les %
+      var totalPosCAD = 0;
+      celiPositions.forEach(function(p) {
+        var sym = (p.symbole||'').toUpperCase(); var qty=parseFloat(p.quantite)||0; var dev=(p.devise||'CAD').toUpperCase();
+        var prix=parseFloat(mkt&&mkt[sym])||parseFloat(p.coutMoyen)||0;
+        totalPosCAD += dev==='CAD' ? qty*prix : qty*prix*fx;
+      });
       posEl.innerHTML = celiPositions.map(function(p) {
         var sym = (p.symbole || '').toUpperCase();
         var qty = parseFloat(p.quantite) || 0;
@@ -5051,16 +5083,19 @@ function renderCeli(fx) {
         var valNat = qty * prix;
         var valCAD = dev === 'CAD' ? valNat : valNat * fx;
         var pnl = prixLive > 0 ? (prixLive - cout) * qty : null;
-        var pnlHtml = '';
-        if (pnl !== null) {
-          var col = pnl >= 0 ? 'var(--green)' : 'var(--red)';
-          pnlHtml = '<div class="kpi-s" style="color:'+col+';font-weight:600">P&L '+(pnl>=0?'+':'')+fi(Math.round(pnl))+' '+dev+'</div>';
-        }
-        return '<div class="kpi" style="flex:1;min-width:150px;max-width:220px">'+
-          '<div class="kpi-l">'+sym+'</div>'+
+        var pnlPct = (pnl !== null && cout > 0) ? (pnl/(cout*qty)*100) : null;
+        var pnlCol = pnl===null?'var(--muted)':pnl>=0?'var(--green)':'var(--red)';
+        var pnlStr = pnl===null ? '' : (pnl>=0?'+':'')+fi(Math.round(pnl))+' '+dev+(pnlPct!==null?' ('+(pnlPct>=0?'+':'')+pnlPct.toFixed(1)+'%)':'');
+        var pctPort = totalPosCAD > 0 ? (valCAD/totalPosCAD*100) : 0;
+        return '<div class="kpi" style="flex:1;min-width:140px;max-width:210px">'+
+          '<div class="kpi-l" style="display:flex;justify-content:space-between"><span>'+sym+'</span><span style="color:var(--muted);font-size:8px">'+dev+'</span></div>'+
           '<div class="kpi-v">$'+fi(Math.round(valCAD))+' CAD</div>'+
-          '<div class="kpi-s">'+fi(qty)+' · $'+prix.toFixed(2)+' · '+dev+'</div>'+
-          pnlHtml+
+          '<div class="kpi-s">'+fi(qty)+' u · $'+prix.toFixed(2)+'</div>'+
+          (pnl!==null?'<div class="kpi-s" style="color:'+pnlCol+';font-weight:600">P&amp;L '+pnlStr+'</div>':'')+
+          '<div style="margin-top:5px;height:3px;background:var(--s2);border-radius:2px;overflow:hidden">'+
+            '<div style="height:100%;width:'+Math.max(0,Math.min(100,pctPort))+'%;background:'+(pnl===null?'var(--muted)':pnlCol)+';border-radius:2px"></div>'+
+          '</div>'+
+          '<div class="kpi-s" style="margin-top:3px">'+pctPort.toFixed(1)+'%</div>'+
         '</div>';
       }).join('');
     }
@@ -5175,32 +5210,51 @@ function renderCeliPanel() {
     }
   }
 
-  // ── Tableau positions ──
-  var pp = document.getElementById('celi-pos-body');
+  // ── Cartes positions CELI (style onglet Actions) ──
+  var pp = document.getElementById('celi-pos-cards');
   if (pp) {
     if (!celiPositions.length) {
-      pp.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem">Aucune position — appuyer sur Reconstruire</td></tr>';
+      pp.innerHTML = '<div style="color:var(--muted);font-size:11px;font-family:var(--mono);padding:0.5rem">Aucune position — appuyer sur Reconstruire</div>';
     } else {
-      pp.innerHTML = celiPositions.map(function(p) {
+      var totalValCAD = 0;
+      celiPositions.forEach(function(p) {
+        var sym = (p.symbole||'').toUpperCase();
+        var qty = parseFloat(p.quantite)||0;
+        var dev = (p.devise||'CAD').toUpperCase();
+        var cout = parseFloat(p.coutMoyen)||0;
+        var prix = parseFloat(mkt&&mkt[sym])||cout;
+        var valNat = qty*prix;
+        var valCAD = dev==='CAD' ? valNat : valNat*(m.fx||1.38);
+        totalValCAD += valCAD;
+      });
+      var cardsHtml = celiPositions.map(function(p) {
         var sym  = (p.symbole||'').toUpperCase();
         var dev  = (p.devise||'CAD').toUpperCase();
         var qty  = parseFloat(p.quantite)||0;
         var cout = parseFloat(p.coutMoyen)||0;
         var prix = parseFloat(mkt&&mkt[sym])||cout;
+        var prixLive = parseFloat(mkt&&mkt[sym])||0;
         var valNat = qty*prix;
         var valCAD = dev==='CAD' ? valNat : valNat*(m.fx||1.38);
-        var pnl    = prix>0 ? (prix-cout)*qty : null;
-        var pnlCol = pnl===null?'':pnl>=0?'color:var(--green)':'color:var(--red)';
-        return '<tr>'+
-          '<td style="font-weight:600">'+sym+'</td>'+
-          '<td>'+dev+'</td>'+
-          '<td style="text-align:right">'+fi(qty)+'</td>'+
-          '<td style="text-align:right">$'+cout.toFixed(2)+'</td>'+
-          '<td style="text-align:right">$'+fi(Math.round(qty*cout))+'</td>'+
-          '<td style="text-align:right">$'+fi(Math.round(valCAD))+' CAD</td>'+
-          '<td style="text-align:right;'+pnlCol+'">'+(pnl===null?'—':(pnl>=0?'+':'')+fi(Math.round(pnl))+' '+dev)+'</td>'+
-        '</tr>';
+        var coutTotal = qty*cout;
+        var pnl    = prixLive > 0 ? (prixLive-cout)*qty : null;
+        var pnlPct = (pnl !== null && coutTotal > 0) ? (pnl/coutTotal*100) : null;
+        var pnlCol = pnl===null?'var(--muted)':pnl>=0?'var(--green)':'var(--red)';
+        var pnlStr = pnl===null ? '—' : (pnl>=0?'+':'')+fi(Math.round(pnl))+' '+dev+(pnlPct!==null?' ('+(pnlPct>=0?'+':'')+pnlPct.toFixed(1)+'%)':'');
+        var pctPort = totalValCAD > 0 ? (valCAD/totalValCAD*100) : 0;
+        var barColor = pnl===null?'var(--muted)':pnl>=0?'var(--green)':'var(--red)';
+        return '<div class="kpi" style="flex:1;min-width:160px;max-width:230px">'+
+          '<div class="kpi-l" style="display:flex;justify-content:space-between"><span>'+sym+'</span><span style="color:var(--muted)">'+dev+'</span></div>'+
+          '<div class="kpi-v">$'+fi(Math.round(valCAD))+' CAD</div>'+
+          '<div class="kpi-s">'+fi(qty)+' u · $'+prix.toFixed(2)+' · coût $'+cout.toFixed(2)+'</div>'+
+          '<div class="kpi-s" style="color:'+pnlCol+';font-weight:600">P&amp;L '+pnlStr+'</div>'+
+          '<div style="margin-top:6px;height:3px;background:var(--s2);border-radius:2px;overflow:hidden">'+
+            '<div style="height:100%;width:'+Math.max(0,Math.min(100,pctPort))+'%;background:'+barColor+';border-radius:2px"></div>'+
+          '</div>'+
+          '<div class="kpi-s" style="margin-top:3px">'+pctPort.toFixed(1)+'% du CELI</div>'+
+        '</div>';
       }).join('');
+      pp.innerHTML = cardsHtml;
     }
   }
 }
