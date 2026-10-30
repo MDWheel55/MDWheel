@@ -1080,6 +1080,9 @@ function syncAcctFromActions() {
   // Agrège par symbole normalisé (UBIL, UBIL.U, UBIL.U-C -> UBIL) et SOMME les
   // quantités. Si une position vit sur deux lignes (état initial sous « UBIL.U »
   // + nouvel achat sous « UBIL »), elles FUSIONNENT au lieu de s'écraser.
+  // Remettre toutes les quantités à 0 d'abord : un titre entièrement vendu (ex. XEG)
+  // disparaît de Positions_Actions et doit tomber à 0, pas garder son ancienne quantité.
+  Object.keys(acctQty).forEach(k => { acctQty[k] = 0; });
   const agg = {};
   actionsData.forEach(a => {
     const key = symKey(a.symbole);
@@ -1590,11 +1593,25 @@ async function actualiserTout() {
     setSyncStatus(col==='var(--green)', msg);
   };
 
-  const steps = {marche:false, rsi:false, options:false, sheets:false};
+  const steps = {reconstruction:false, marche:false, rsi:false, options:false, sheets:false};
   let optOk=0, optErr=0;
 
-  // ── 1. Prix marché (MarketData US + Yahoo TSX) ──
-  setStatus('1/4 Prix marché...');
+  // ── 1. Reconstruction (corpo + CELI) puis rechargement depuis Sheets ──
+  // Recalcule Positions_Actions / Positions_Options / Compte / CELI à partir des
+  // transactions (sources de vérité). Sans danger à répéter : même entrées = même résultat.
+  // Si ça échoue, on continue quand même avec les prix (données de la dernière reconstruction).
+  setStatus('1/5 Reconstruction...');
+  try {
+    await gsApi({action:'reconstruire'});
+    await loadAll();
+    steps.reconstruction = true;
+  } catch(e) {
+    console.warn('reconstruire:', e);
+    setStatus('⚠ Reconstruction — échec, on continue', 'var(--amber)');
+  }
+
+  // ── 2. Prix marché (MarketData US + Yahoo TSX) ──
+  setStatus('2/5 Prix marché...');
   try {
     const dl = ms => new Promise(r=>setTimeout(r,ms));
     // Spot US via MarketData (serveur, même token que les options), repli Yahoo automatique.
@@ -1678,11 +1695,11 @@ async function actualiserTout() {
     setStatus('⚠ Prix marché — échec', 'var(--red)');
   }
 
-  // ── 2. RSI (calculé côté serveur sur les clôtures Yahoo) ──
+  // ── 3. RSI (calculé côté serveur sur les clôtures Yahoo) ──
   // Finnhub /indicator échouait depuis le navigateur (CORS/plan gratuit) : le RSI
   // restait figé sur ses défauts (QQQ 65 / SPY 62 / GLD 40). Le backend getRSI
   // calcule le RSI(14) de Wilder à partir de 3 mois de clôtures Yahoo. Fiable.
-  setStatus('2/4 RSI...');
+  setStatus('3/5 RSI...');
   try {
     const dlr = ms => new Promise(r=>setTimeout(r,ms));
     for (const sym of ['QQQ','SPY','GLD','NVDA']) {
@@ -1696,11 +1713,11 @@ async function actualiserTout() {
     steps.rsi = true;
   } catch(e) { steps.rsi = true; }
 
-  // ── 3. Prix options ──
+  // ── 4. Prix options ──
   //  · Options réglées CAD (XEG, XIU…) : aucune API de cotation Bourse de Montréal
   //    -> marquage Black-Scholes local (spot TSX + IV figée + dividende). Instantané.
   //  · Options US : MarketData/Yahoo comme avant.
-  setStatus('3/4 Prix options...');
+  setStatus('4/5 Prix options...');
   for(const p of positions.filter(p=>p.occ&&p.statut!=='stock')) {
     if(deviseTicker(p.ticker)==='CAD'){
       try {
@@ -1735,8 +1752,8 @@ async function actualiserTout() {
   }
   steps.options = optOk > 0;
 
-  // ── 4. Google Sheets ──
-  setStatus('4/4 Sheets...');
+  // ── 5. Google Sheets ──
+  setStatus('5/5 Sheets...');
   try {
     const cpt = await gsApi({action:'getCompte'});
     if(cpt) {
@@ -1822,6 +1839,7 @@ async function actualiserTout() {
   const ok=steps.marche&&steps.rsi;
   const mktState = mkt.QQQ > 0 ? (steps.marche?'✓ Marché':'✗ Marché') : '✗ Marché';
   const summary=[
+    steps.reconstruction?'✓ Reconstruit':'⚠ Reconstruction',
     mktState,
     steps.rsi?'✓ RSI':'✗ RSI',
     optOk>0?'✓ '+optOk+' opts':optErr>0?'⚠ opts marché fermé':'⚠ opts',
@@ -5288,7 +5306,8 @@ async function reconstruireCeli() {
   var st = document.getElementById('celi-status');
   if (st) st.textContent = '⟳ Reconstruction en cours…';
   try {
-    await gsApi({action:'reconstruire'});
+    await gsApi({action:'reconstruire'});   // reconstruit corpo ET CELI côté Apps Script
+    await loadAll();                         // recharger aussi les positions corpo (sinon affichage périmé)
     await loadCeliPanel();
     if (st) st.textContent = '✓ Reconstruction terminée · ' + new Date().toLocaleTimeString('fr-CA');
     recalcCompte(); // rafraîchir la vue Compte aussi
