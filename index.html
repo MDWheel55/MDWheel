@@ -582,44 +582,76 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
 
 
-  <!-- SYNTHÈSE DU COMPTE -->
-  <div class="sec">SYNTHÈSE DU COMPTE</div>
+  <!-- ════════════════════════════════════════════════════════════════
+       LAYOUT DEUX COLONNES : CORPO (gauche) · CELI (droite)
+       ════════════════════════════════════════════════════════════════ -->
+  <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
 
-  <!-- SECTION 1 : Compte total + graphique performance (2 colonnes) -->
-  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:14px">
-    <div id="compte-total-box" style="flex:1 1 220px;min-width:200px;max-width:300px;display:flex"></div>
-    <div id="perf-chart-container" style="flex:3 1 420px;min-width:300px;position:relative;background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:1rem;min-height:220px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <span style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em">PERFORMANCE DU PORTEFEUILLE</span>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button class="btn btn-d" id="perf-v-sem"   style="padding:3px 10px;font-size:10px" onclick="setPerfView('semaine')">Semaine</button>
-          <button class="btn btn-p" id="perf-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('mois')">Mois</button>
-          <button class="btn btn-d" id="perf-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPerfView('annee')">Année</button>
-          <button class="btn btn-d" id="perf-v-tout"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('tout')">Tout</button>
+    <!-- ── COLONNE GAUCHE : COMPTE CORPORATIF ── -->
+    <div style="flex:3;min-width:340px">
+
+      <!-- SYNTHÈSE DU COMPTE -->
+      <div class="sec">SYNTHÈSE DU COMPTE</div>
+
+      <!-- SECTION 1 : Compte total + graphique performance (2 colonnes) -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:14px">
+        <div id="compte-total-box" style="flex:1 1 220px;min-width:200px;max-width:300px;display:flex"></div>
+        <div id="perf-chart-container" style="flex:3 1 420px;min-width:300px;position:relative;background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:1rem;min-height:220px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em">PERFORMANCE DU PORTEFEUILLE</span>
+            <div style="display:flex;gap:6px;align-items:center">
+              <button class="btn btn-d" id="perf-v-sem"   style="padding:3px 10px;font-size:10px" onclick="setPerfView('semaine')">Semaine</button>
+              <button class="btn btn-p" id="perf-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('mois')">Mois</button>
+              <button class="btn btn-d" id="perf-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPerfView('annee')">Année</button>
+              <button class="btn btn-d" id="perf-v-tout"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('tout')">Tout</button>
+            </div>
+          </div>
+          <div id="perf-chart" style="width:100%;min-height:190px"></div>
+          <div id="perf-no-data" style="position:absolute;top:38px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-family:var(--mono);padding:1rem">
+            Données insuffisantes — le graphique se remplira automatiquement lors des actualisations quotidiennes
+          </div>
+          <div id="perf-stats" style="display:flex;gap:16px;margin-top:8px;font-family:var(--mono);font-size:10px;flex-wrap:wrap"></div>
         </div>
       </div>
-      <div id="perf-chart" style="width:100%;min-height:190px"></div>
-      <div id="perf-no-data" style="position:absolute;top:38px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-family:var(--mono);padding:1rem">
-        Données insuffisantes — le graphique se remplira automatiquement lors des actualisations quotidiennes
-      </div>
-      <div id="perf-stats" style="display:flex;gap:16px;margin-top:8px;font-family:var(--mono);font-size:10px;flex-wrap:wrap"></div>
-    </div>
-  </div>
 
-  <!-- SECTION 2 : Actions (avec P&L) -->
-  <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">ACTIONS</div>
-  <div id="compte-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px"></div>
+      <!-- SECTION 2 : Actions (avec P&L) -->
+      <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">ACTIONS</div>
+      <div id="compte-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px"></div>
 
-  <!-- SECTION 3 : T-bills -->
-  <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">T-BILLS · COLLATÉRAL</div>
-  <div id="compte-tbills" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px"></div>
+      <!-- SECTION 3 : T-bills -->
+      <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">T-BILLS · COLLATÉRAL</div>
+      <div id="compte-tbills" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px"></div>
 
-  <!-- SECTION 4 : Cash -->
-  <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">CASH</div>
-  <div id="compte-cash" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:1.5rem"></div>
+      <!-- SECTION 4 : Cash -->
+      <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">CASH</div>
+      <div id="compte-cash" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:1rem"></div>
 
-  <!-- REVENU MENSUEL (inchangé, à la fin) -->
-  <div class="sec">REVENU PASSIF MENSUEL ESTIMÉ</div>
+    </div><!-- fin colonne gauche corpo -->
+
+    <!-- ── COLONNE DROITE : CELI ── -->
+    <div style="flex:2;min-width:280px">
+
+      <div class="sec">SYNTHÈSE CELI</div>
+
+      <!-- Totaux CELI : Compte CAD | Compte USD | Total -->
+      <div id="celi-totaux" style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:14px"></div>
+
+      <!-- Positions CELI -->
+      <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">POSITIONS CELI</div>
+      <div id="celi-positions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px"></div>
+
+      <!-- Cash CELI -->
+      <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">CASH CELI</div>
+      <div id="celi-cash" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:1rem"></div>
+
+    </div><!-- fin colonne droite CELI -->
+
+  </div><!-- fin layout deux colonnes -->
+
+  <!-- ════════════════════════════════════════════════════════════════
+       REVENU PASSIF — pleine largeur — corpo + CELI combinés
+       ════════════════════════════════════════════════════════════════ -->
+  <div class="sec" style="margin-top:1rem">REVENU PASSIF MENSUEL ESTIMÉ</div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
     <label style="font-size:12px;color:var(--muted)">Objectif passif (USD)&nbsp;$</label>
     <input class="pil-inp" id="c-obj" type="number" step="500" min="0" value="5000" onchange="recalcCompte()" style="width:82px">
@@ -877,6 +909,9 @@ var acctQty = {VEQT:722, XEG:456, SPYM:365, CBIL:4000, UBIL:1600, GLD:9, IBIT:60
 var acctCost = {VEQT:54.94, XEG:25.72, SPYM:78.54, CBIL:50.01, UBIL:50.02, GLD:408.67, IBIT:34.85}; // coûts moyens Disnat
 // Actions chargées depuis Positions_Actions (source de vérité unique) — voir loadAll()
 var actionsData = [];
+// CELI — positions et compte chargés depuis Sheets
+var celiPositions = [];   // [{symbole, nom, devise, quantite, coutMoyen, coutTotal}]
+var celiCompte    = {};   // {CashCAD, CashUSD, Compte_CAD:'5DJ1WZ9', Compte_USD:'5DJ1WT2'}
 
 // Date du jour en HEURE LOCALE (Montréal), format yyyy-MM-dd.
 // Évite le piège de toISOString() qui bascule au lendemain dès 20h (UTC),
@@ -1046,13 +1081,18 @@ async function reloadFromSheets() {
 
 async function loadAll() {
   setSyncStatus(false, 'Chargement...');
-  const [pos, cpt, trades, actions, ivh] = await Promise.all([
+  const [pos, cpt, trades, actions, ivh, celiPos, celiCpt] = await Promise.all([
     gsApi({action:'getPositions'}),
     gsApi({action:'getCompte'}),
     gsApi({action:'getTrades'}),
     gsApi({action:'getActions'}),
-    gsApi({action:'getIVHist'}).catch(()=>null)   // historique IV multi-appareils
+    gsApi({action:'getIVHist'}).catch(()=>null),   // historique IV multi-appareils
+    gsApi({action:'getActionsCeli'}).catch(()=>[]),
+    gsApi({action:'getCompteCeli'}).catch(()=>({}))
   ]);
+  // Charger les données CELI dans les variables globales
+  if (celiPos && celiPos.length > 0) celiPositions = celiPos;
+  if (celiCpt && typeof celiCpt === 'object') celiCompte = celiCpt;
   ivHistMerge(ivh);   // fusionne l'historique IV du Sheet dans le cache local
   // Charger les actions depuis Positions_Actions (source de vérité unique)
   if (actions && actions.length > 0) {
@@ -1611,6 +1651,15 @@ async function actualiserTout() {
         setSyncStatus(true,'Dernière actu: '+label);
       }
     }
+    // Charger les données CELI
+    try {
+      const [cp, cc] = await Promise.all([
+        gsApi({action:'getActionsCeli'}),
+        gsApi({action:'getCompteCeli'})
+      ]);
+      if (cp && cp.length > 0) celiPositions = cp;
+      if (cc && typeof cc === 'object') celiCompte = cc;
+    } catch(e) {}
     steps.sheets = true;
   } catch(e) { setStatus('⚠ Sheets — échec','var(--amber)'); steps.sheets = false; }
 
@@ -4698,36 +4747,63 @@ function recalcCompte() {
     {l:'CASH USD', v:'$'+fi(Math.round(cashU2*fx2))+' CAD', s:'~$'+fi(Math.round(cashU2))+' USD · natif USD', c:cashU2>=0?'':'r'},
   ].map(mkCard).join('') + mkPct(pctOf(cashValCAD), 'var(--blue)', '$'+fi(Math.round(cashValCAD))+' CAD total');
 
-  // Revenu mensuel
-  // Revenu passif : options RÉELLES (prime réelle du livre, source unique = onglet pilotage)
-  // + revenu fixe. Fini l'estimation « 11–12% × 1.5 » sur notionnel : on affiche le vrai.
-  // Devises explicites : options = USD, CBIL-C = CAD natif, UBIL.U-C = USD natif,
-  // dividendes VEQT/XEG (CAD→USD) + SPYM (USD) = USD. Total affiché en USD ET en CAD.
+  // ── REVENU PASSIF ── corpo + CELI combinés ──────────────────────────────
+  // CORPO : options réelles (pilotage) + T-bills + dividendes corpo
   var revPuts=Math.round((function(){ try{ var LL=pilotPositions(),ss=0; LL.forEach(function(o){ if(o.ve>0) ss+=o.jour; }); return ss*30.44; }catch(e){ return 0; } })());  // USD
   var cbilCAD=Math.round(qC*pC*0.036/12);                        // intérêt CBIL-C, natif CAD
   var revUBIL=Math.round(qU*pU*0.039/12);                        // intérêt UBIL.U-C, natif USD
-  var revDiv =Math.round((qV*0.76/fx2+qX*0.70/fx2+qS*0.94+((acctQty.XIU||0)+(acctQty.XUI||0))*1.09/fx2+(acctQty.XEC||0)*0.70/fx2+(acctQty.XEF||0)*1.20/fx2)/12);  // dividendes, converti USD
-  var totalUSD=revPuts+revUBIL+revDiv+Math.round(cbilCAD/fx2);   // total passif en USD
-  var totalCAD=Math.round(totalUSD*fx2);                          // même total, en CAD
-  var OBJc=(function(){ var e=document.getElementById('c-obj'); var v=e?parseFloat(e.value):NaN; return (isNaN(v)||v<=0)?5000:v; })();  // objectif passif propre au Compte (USD, éditable)
+  var revDiv =Math.round((qV*0.76/fx2+qX*0.70/fx2+qS*0.94+((acctQty.XIU||0)+(acctQty.XUI||0))*1.09/fx2+(acctQty.XEC||0)*0.70/fx2+(acctQty.XEF||0)*1.20/fx2)/12);
+  var corpoUSD = revPuts + revUBIL + revDiv + Math.round(cbilCAD/fx2);
+
+  // CELI : dividendes positions CELI (par symbole, annualisé /12)
+  // Taux dividendes annuels estimés par symbole (même référence que corpo)
+  var CELI_DIV_RATES = { XEC:0.70, XEF:1.20, XIU:1.09, IBIT:0, NVDA:0.04, SPY:5.90, TSLA:0, VEQT:0.76 };
+  var celiDivUSD = Math.round((function(){
+    var s = 0;
+    celiPositions.forEach(function(p) {
+      var sym = (p.symbole||'').toUpperCase();
+      var qty = parseFloat(p.quantite) || 0;
+      var dev = (p.devise||'CAD').toUpperCase();
+      var rate = CELI_DIV_RATES[sym] || 0;
+      // rate est en devise native du titre
+      var divNat = qty * rate / 12;
+      s += dev === 'CAD' ? divNat / fx2 : divNat;   // tout ramener en USD
+    });
+    return s;
+  })());
+
+  // CELI : covered calls (positions ouvertes dans Trades_Options avec compte CELI — estimé depuis pilotPositions si dispo)
+  var celiCovCallsUSD = Math.round((function(){
+    try {
+      // On cherche dans trades (options) les positions CELI ouvertes ve>0
+      // Pour l'instant on utilise le même pilotPositions() filtré par compte si possible
+      // Fallback : 0 (les covered calls CELI apparaissent dans Trades_Options comme le corpo)
+      return 0; // sera enrichi quand le filtre compte sera disponible
+    } catch(e) { return 0; }
+  })());
+
+  var celiPassifUSD = celiDivUSD + celiCovCallsUSD;
+  var totalUSD = corpoUSD + celiPassifUSD;             // GRAND TOTAL corpo + CELI
+  var totalCAD = Math.round(totalUSD * fx2);
+
+  var OBJc=(function(){ var e=document.getElementById('c-obj'); var v=e?parseFloat(e.value):NaN; return (isNaN(v)||v<=0)?5000:v; })();
   var objPct = Math.round(totalUSD/OBJc*100);
   var objCol = totalUSD>=OBJc?'var(--green)':totalUSD>=OBJc*0.7?'var(--amber)':'var(--red)';
+
   var revEl=document.getElementById('revenu-kpis');
   if(revEl){
-    // ── Priorité : Total passif (CAD) + Objectif atteint (en gros) ──
-    // Revenu passif HORS options : CBIL + UBIL + dividendes, en CAD (quasi-garanti)
-    var fixeDivCAD = cbilCAD + Math.round(revUBIL*fx2) + Math.round(revDiv*fx2);
+    var fixeDivCAD = cbilCAD + Math.round(revUBIL*fx2) + Math.round(revDiv*fx2) + Math.round(celiPassifUSD*fx2);
     var hero =
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+
         '<div class="kpi" style="flex:2;min-width:230px">'+
-          '<div class="kpi-l">TOTAL PASSIF (CAD)</div>'+
+          '<div class="kpi-l">TOTAL PASSIF CORPO + CELI (CAD)</div>'+
           '<div class="kpi-v g" style="font-size:26px">~$'+fi(totalCAD)+' CAD</div>'+
-          '<div class="kpi-s">~$'+fi(totalUSD)+' USD · options réelles + revenu fixe · ≈ USD × '+fx2.toFixed(3)+'</div>'+
+          '<div class="kpi-s">~$'+fi(totalUSD)+' USD · corpo + CELI combinés · ≈ USD × '+fx2.toFixed(3)+'</div>'+
         '</div>'+
         '<div class="kpi" style="flex:1.4;min-width:200px">'+
           '<div class="kpi-l">FIXE + DIVIDENDES (CAD)</div>'+
           '<div class="kpi-v" style="font-size:26px;color:var(--blue)">~$'+fi(fixeDivCAD)+' CAD</div>'+
-          '<div class="kpi-s">CBIL + UBIL + dividendes · hors options</div>'+
+          '<div class="kpi-s">CBIL + UBIL + div corpo + div CELI · hors options</div>'+
         '</div>'+
         '<div class="kpi" style="flex:1;min-width:190px">'+
           '<div class="kpi-l">OBJECTIF ATTEINT</div>'+
@@ -4738,13 +4814,16 @@ function recalcCompte() {
           '<div class="kpi-s">de $'+fi(OBJc)+' USD/mois · éditable</div>'+
         '</div>'+
       '</div>';
-    // ── Détail (plus discret, plus petit) ──
+    // ── Détail ──
     var det=[
-      {l:'Options (réel)',     v:'$'+fi(revPuts)+' USD',   s:'prime réelle · pilotage'},
-      {l:'CBIL-C (3.6%)',      v:'$'+fi(cbilCAD)+' CAD',   s:fi(qC)+' u · natif CAD'},
-      {l:'UBIL.U-C (3.9%)',    v:'$'+fi(revUBIL)+' USD',   s:fi(qU)+' u · natif USD'},
-      {l:'Dividendes',         v:'$'+fi(revDiv)+' USD',    s:'VEQT·XEG·SPYM·XIU·XEC·XEF'},
-      {l:'Total passif (USD)', v:'~$'+fi(totalUSD)+' USD', s:'référence'},
+      {l:'Options corpo (réel)', v:'$'+fi(revPuts)+' USD',       s:'prime réelle · pilotage'},
+      {l:'CBIL-C (3.6%)',        v:'$'+fi(cbilCAD)+' CAD',       s:fi(qC)+' u · natif CAD'},
+      {l:'UBIL.U-C (3.9%)',      v:'$'+fi(revUBIL)+' USD',       s:fi(qU)+' u · natif USD'},
+      {l:'Div corpo',            v:'$'+fi(revDiv)+' USD',         s:'VEQT·XEG·SPYM·XIU·XEC·XEF'},
+      {l:'Div CELI',             v:'$'+fi(celiDivUSD)+' USD',     s:'XEC·XEF·XIU·SPY·… CELI'},
+      {l:'CovCall CELI',         v:'$'+fi(celiCovCallsUSD)+' USD',s:'calls couverts CELI'},
+      {l:'Total corpo (USD)',    v:'~$'+fi(corpoUSD)+' USD',      s:'référence'},
+      {l:'Total CELI (USD)',     v:'~$'+fi(celiPassifUSD)+' USD', s:'non-imposable'},
     ];
     var detHtml='<div style="display:flex;gap:6px;flex-wrap:wrap">'+det.map(function(i){
       return '<div class="kpi" style="flex:1;min-width:118px;max-width:175px;padding:0.5rem 0.65rem;opacity:0.8">'+
@@ -4757,8 +4836,105 @@ function recalcCompte() {
   }
 
   renderActionsTable();
+  renderCeli(fx2);
 }
 
+// ═══════════════════════════════════════════════════════════
+//  SECTION CELI — rendu dans l'onglet Compte
+// ═══════════════════════════════════════════════════════════
+function renderCeli(fx) {
+  if (!fx || fx <= 0) { var m2 = calcMarge(); fx = m2.fx || 1.38; }
+
+  var cashCAD = parseFloat(celiCompte.CashCAD) || 0;
+  var cashUSD = parseFloat(celiCompte.CashUSD) || 0;
+  var compteCAD = celiCompte.Compte_CAD || '5DJ1WZ9';
+  var compteUSD = celiCompte.Compte_USD || '5DJ1WT2';
+
+  // Calculer la valeur au marché des positions CELI
+  var valCeliCAD = 0;  // valeur CAD des positions réglées en CAD
+  var valCeliUSD = 0;  // valeur USD des positions réglées en USD
+
+  celiPositions.forEach(function(p) {
+    var sym = (p.symbole || '').toUpperCase();
+    var qty = parseFloat(p.quantite) || 0;
+    var dev = (p.devise || 'CAD').toUpperCase();
+    // Prix live si dispo dans mkt, sinon coût moyen
+    var prix = parseFloat(mkt && mkt[sym]) || parseFloat(p.coutMoyen) || 0;
+    var val = qty * prix;
+    if (dev === 'CAD') valCeliCAD += val;
+    else valCeliUSD += val;
+  });
+
+  // Total CELI en CAD
+  var totalCeliCAD_pos = valCeliCAD + valCeliUSD * fx;
+  var totalCeliCAD_cash = cashCAD + cashUSD * fx;
+  var totalCeliCAD = totalCeliCAD_pos + totalCeliCAD_cash;
+
+  var mkC = function(o) {
+    return '<div class="kpi" style="flex:1;min-width:170px;max-width:280px">'+
+      '<div class="kpi-l">'+o.l+'</div>'+
+      '<div class="kpi-v'+(o.c?' '+o.c:'')+'">'+o.v+'</div>'+
+      '<div class="kpi-s">'+o.s+'</div>'+
+    '</div>';
+  };
+
+  // ── TILE TOTAUX : compte CAD | compte USD | total CELI ──
+  var totEl = document.getElementById('celi-totaux');
+  if (totEl) {
+    totEl.innerHTML = [
+      {l:'CELI CAD · '+compteCAD,
+       v:'$'+fi(Math.round(valCeliCAD + cashCAD))+' CAD',
+       s:'positions + cash CAD'},
+      {l:'CELI USD · '+compteUSD,
+       v:'$'+fi(Math.round((valCeliUSD + cashUSD)*fx))+' CAD',
+       s:'~$'+fi(Math.round(valCeliUSD + cashUSD))+' USD · converti'},
+      {l:'TOTAL CELI',
+       v:'$'+fi(Math.round(totalCeliCAD))+' CAD',
+       s:'~$'+fi(Math.round(totalCeliCAD/fx))+' USD · positions + cash',
+       c:'g'},
+    ].map(mkC).join('');
+  }
+
+  // ── POSITIONS CELI : une tile par position ──
+  var posEl = document.getElementById('celi-positions');
+  if (posEl) {
+    if (!celiPositions.length) {
+      posEl.innerHTML = '<div style="color:var(--muted);font-size:11px;font-family:var(--mono)">Aucune position — actualisez d\'abord</div>';
+    } else {
+      posEl.innerHTML = celiPositions.map(function(p) {
+        var sym = (p.symbole || '').toUpperCase();
+        var qty = parseFloat(p.quantite) || 0;
+        var dev = (p.devise || 'CAD').toUpperCase();
+        var cout = parseFloat(p.coutMoyen) || 0;
+        var prixLive = parseFloat(mkt && mkt[sym]) || 0;
+        var prix = prixLive || cout;
+        var valNat = qty * prix;
+        var valCAD = dev === 'CAD' ? valNat : valNat * fx;
+        var pnl = prixLive > 0 ? (prixLive - cout) * qty : null;
+        var pnlHtml = '';
+        if (pnl !== null) {
+          var col = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+          pnlHtml = '<div class="kpi-s" style="color:'+col+';font-weight:600">P&L '+(pnl>=0?'+':'')+fi(Math.round(pnl))+' '+dev+'</div>';
+        }
+        return '<div class="kpi" style="flex:1;min-width:150px;max-width:220px">'+
+          '<div class="kpi-l">'+sym+'</div>'+
+          '<div class="kpi-v">$'+fi(Math.round(valCAD))+' CAD</div>'+
+          '<div class="kpi-s">'+fi(qty)+' · $'+prix.toFixed(2)+' · '+dev+'</div>'+
+          pnlHtml+
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // ── CASH CELI ──
+  var cashEl = document.getElementById('celi-cash');
+  if (cashEl) {
+    cashEl.innerHTML = [
+      {l:'CASH CAD · CELI', v:'$'+fi(Math.round(cashCAD))+' CAD', s:'natif CAD · '+compteCAD, c:cashCAD>=0?'':'r'},
+      {l:'CASH USD · CELI', v:'$'+fi(Math.round(cashUSD*fx))+' CAD', s:'~$'+fi(Math.round(cashUSD))+' USD · '+compteUSD, c:cashUSD>=0?'':'r'},
+    ].map(mkC).join('');
+  }
+}
 
 // ═══════════════════════════════════════════════════════════
 //  DIVERSIFICATION DU PORTEFEUILLE — répartition des titres détenus
