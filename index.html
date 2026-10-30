@@ -211,6 +211,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   <button class="nav-tab" onclick="showTab('dashboard',this)">Pilotage</button>
   <button class="nav-tab" onclick="showTab('options',this)">Options</button>
   <button class="nav-tab" onclick="showTab('actions',this)">Actions</button>
+  <button class="nav-tab" onclick="showTab('celi',this)">CELI</button>
   <button class="nav-tab" onclick="showTab('compta',this)">Compta</button>
   <button class="nav-tab" onclick="showTab('scenario',this)">Scénario</button>
   <button class="nav-tab" onclick="showTab('tresorerie',this)">Trésorerie</button>
@@ -582,71 +583,75 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
 
 
-  <!-- ════════════════════════════════════════════════════════════════
-       LAYOUT DEUX COLONNES : CORPO (gauche) · CELI (droite)
-       ════════════════════════════════════════════════════════════════ -->
-  <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
-
-    <!-- ── COLONNE GAUCHE : COMPTE CORPORATIF ── -->
-    <div style="flex:3;min-width:340px">
-
-      <!-- SYNTHÈSE DU COMPTE -->
-      <div class="sec">SYNTHÈSE DU COMPTE</div>
-
-      <!-- SECTION 1 : Compte total + graphique performance (2 colonnes) -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:14px">
-        <div id="compte-total-box" style="flex:1 1 220px;min-width:200px;max-width:300px;display:flex"></div>
-        <div id="perf-chart-container" style="flex:3 1 420px;min-width:300px;position:relative;background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:1rem;min-height:220px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <span style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em">PERFORMANCE DU PORTEFEUILLE</span>
-            <div style="display:flex;gap:6px;align-items:center">
-              <button class="btn btn-d" id="perf-v-sem"   style="padding:3px 10px;font-size:10px" onclick="setPerfView('semaine')">Semaine</button>
-              <button class="btn btn-p" id="perf-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('mois')">Mois</button>
-              <button class="btn btn-d" id="perf-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPerfView('annee')">Année</button>
-              <button class="btn btn-d" id="perf-v-tout"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('tout')">Tout</button>
-            </div>
-          </div>
-          <div id="perf-chart" style="width:100%;min-height:190px"></div>
-          <div id="perf-no-data" style="position:absolute;top:38px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-family:var(--mono);padding:1rem">
-            Données insuffisantes — le graphique se remplira automatiquement lors des actualisations quotidiennes
-          </div>
-          <div id="perf-stats" style="display:flex;gap:16px;margin-top:8px;font-family:var(--mono);font-size:10px;flex-wrap:wrap"></div>
+  <!-- ════════════════════════════════════════════════════
+       BLOC 1 — TOTAL COMPTES (corpo + CELI) + graphique
+       Pleine largeur
+       ════════════════════════════════════════════════════ -->
+  <div class="sec">SYNTHÈSE DU COMPTE</div>
+  <div style="display:flex;gap:8px;align-items:stretch;margin-bottom:12px;flex-wrap:wrap">
+    <!-- Tile total global -->
+    <div id="compte-total-box" style="flex:0 0 220px;min-width:200px;display:flex"></div>
+    <!-- Graphique perf -->
+    <div id="perf-chart-container" style="flex:1 1 400px;min-width:300px;position:relative;background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:1rem;min-height:220px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em">PERFORMANCE DU PORTEFEUILLE</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-d" id="perf-v-sem"   style="padding:3px 10px;font-size:10px" onclick="setPerfView('semaine')">Semaine</button>
+          <button class="btn btn-p" id="perf-v-mois"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('mois')">Mois</button>
+          <button class="btn btn-d" id="perf-v-annee" style="padding:3px 10px;font-size:10px" onclick="setPerfView('annee')">Année</button>
+          <button class="btn btn-d" id="perf-v-tout"  style="padding:3px 10px;font-size:10px" onclick="setPerfView('tout')">Tout</button>
         </div>
       </div>
+      <div id="perf-chart" style="width:100%;min-height:190px"></div>
+      <div id="perf-no-data" style="position:absolute;top:38px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;font-family:var(--mono);padding:1rem">
+        Données insuffisantes — le graphique se remplira automatiquement lors des actualisations quotidiennes
+      </div>
+      <div id="perf-stats" style="display:flex;gap:16px;margin-top:8px;font-family:var(--mono);font-size:10px;flex-wrap:wrap"></div>
+    </div>
+  </div>
 
-      <!-- SECTION 2 : Actions (avec P&L) -->
-      <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">ACTIONS</div>
-      <div id="compte-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px"></div>
+  <!-- ════════════════════════════════════════════════════
+       BLOC 2 — TOTAUX SÉPARÉS corpo / CELI côte à côte
+       ════════════════════════════════════════════════════ -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:16px">
+    <div id="corpo-total-box" style="flex:1 1 220px;min-width:200px;display:flex"></div>
+    <div id="celi-total-box"  style="flex:1 1 220px;min-width:200px;display:flex"></div>
+  </div>
 
-      <!-- SECTION 3 : T-bills -->
-      <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">T-BILLS · COLLATÉRAL</div>
-      <div id="compte-tbills" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px"></div>
+  <!-- ════════════════════════════════════════════════════
+       BLOC 3 — DEUX COLONNES : détail corpo / détail CELI
+       ════════════════════════════════════════════════════ -->
+  <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
 
-      <!-- SECTION 4 : Cash -->
-      <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">CASH</div>
-      <div id="compte-cash" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:1rem"></div>
+    <!-- ── COLONNE GAUCHE : détail corpo ── -->
+    <div style="flex:3;min-width:320px">
+      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.12em;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--border)">COMPTE CORPORATIF · DÉTAIL</div>
 
-    </div><!-- fin colonne gauche corpo -->
+      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:5px">ACTIONS</div>
+      <div id="compte-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:14px"></div>
 
-    <!-- ── COLONNE DROITE : CELI ── -->
-    <div style="flex:2;min-width:280px">
+      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:5px">T-BILLS · COLLATÉRAL</div>
+      <div id="compte-tbills" style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:14px"></div>
 
-      <div class="sec">SYNTHÈSE CELI</div>
+      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:5px">CASH</div>
+      <div id="compte-cash" style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:1rem"></div>
+    </div>
 
-      <!-- Totaux CELI : Compte CAD | Compte USD | Total -->
-      <div id="celi-totaux" style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:14px"></div>
+    <!-- ── COLONNE DROITE : détail CELI ── -->
+    <div style="flex:2;min-width:260px">
+      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.12em;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--border)">COMPTE CELI · DÉTAIL</div>
 
-      <!-- Positions CELI -->
-      <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">POSITIONS CELI</div>
-      <div id="celi-positions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px"></div>
+      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:5px">POSITIONS</div>
+      <div id="celi-positions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:14px"></div>
 
-      <!-- Cash CELI -->
-      <div style="width:100%;font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:6px">CASH CELI</div>
-      <div id="celi-cash" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;margin-bottom:1rem"></div>
+      <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:0.1em;margin-bottom:5px">CASH</div>
+      <div id="celi-cash" style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:1rem"></div>
+    </div>
 
-    </div><!-- fin colonne droite CELI -->
+  </div><!-- fin deux colonnes -->
 
-  </div><!-- fin layout deux colonnes -->
+  <!-- id conservé pour compatibilité mais non affiché ici -->
+  <div id="celi-totaux" style="display:none"></div>
 
   <!-- ════════════════════════════════════════════════════════════════
        REVENU PASSIF — pleine largeur — corpo + CELI combinés
@@ -659,6 +664,115 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
   </div>
   <div id="revenu-kpis" style="margin-bottom:0.5rem"></div>
 
+</div>
+
+
+<!-- PANEL CELI — Trades actions CELI + mouvements cash CELI -->
+<div class="panel" id="tab-celi">
+
+  <div class="sec" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span>CELI — GESTION DES COMPTES NON-IMPOSABLES</span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="btn btn-p" style="padding:4px 12px;font-size:11px" onclick="reconstruireCeli()">⟳ Reconstruire</button>
+    </div>
+  </div>
+  <div id="celi-status" style="font-size:11px;color:var(--muted);margin-bottom:12px">
+    Comptes 5DJ1WZ9 (CAD) · 5DJ1WT2 (USD) · Non-imposable · Aucune écriture Compta
+  </div>
+
+  <!-- KPI résumé CELI -->
+  <div id="celi-panel-kpis" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1.5rem"></div>
+
+  <!-- TRADES ACTIONS CELI -->
+  <div class="sec" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span>TRANSACTIONS — ACTIONS CELI</span>
+    <button class="btn btn-p" style="padding:4px 12px;font-size:11px" onclick="openCeliTradeModal()">+ Ajouter</button>
+  </div>
+  <div class="pwrap" style="margin-bottom:1.5rem">
+    <table class="ptbl">
+      <thead><tr>
+        <th>DATE</th><th>SYMBOLE</th><th>DEV</th><th>OPÉRATION</th>
+        <th style="text-align:right">QTÉ</th><th style="text-align:right">PRIX</th>
+        <th style="text-align:right">MONTANT</th><th>SUPPR.</th>
+      </tr></thead>
+      <tbody id="celi-trades-body"><tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1rem">Actualisez pour charger</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- MOUVEMENTS CASH CELI -->
+  <div class="sec" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span>MOUVEMENTS CASH CELI</span>
+    <button class="btn btn-p" style="padding:4px 12px;font-size:11px" onclick="openCeliCashModal()">+ Ajouter</button>
+  </div>
+  <div class="pwrap" style="margin-bottom:1.5rem">
+    <table class="ptbl">
+      <thead><tr>
+        <th>DATE</th><th>TYPE</th><th>DEVISE</th><th style="text-align:right">MONTANT</th><th>DESCRIPTION</th><th>SUPPR.</th>
+      </tr></thead>
+      <tbody id="celi-cash-body"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1rem">Actualisez pour charger</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- POSITIONS CELI reconstruites -->
+  <div class="sec">POSITIONS CELI (RECONSTRUITES)</div>
+  <div class="pwrap" style="margin-bottom:1rem">
+    <table class="ptbl">
+      <thead><tr>
+        <th>SYMBOLE</th><th>DEV</th><th style="text-align:right">QTÉ</th>
+        <th style="text-align:right">COÛT MOY.</th><th style="text-align:right">COÛT TOTAL</th>
+        <th style="text-align:right">VAL. MKT</th><th style="text-align:right">P&L</th>
+      </tr></thead>
+      <tbody id="celi-pos-body"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem">Actualisez pour charger</td></tr></tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- MODAL AJOUT TRADE CELI -->
+<div class="modal-bg" id="celi-trade-modal" onclick="if(event.target===this)closeCeliTradeModal()">
+  <div class="modal">
+    <div class="modal-title">Nouveau trade CELI</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div><label class="modal-label">Date</label><input class="modal-inp" id="ct-date" type="date"></div>
+      <div><label class="modal-label">Symbole</label><input class="modal-inp" id="ct-sym" type="text" placeholder="XEC" style="text-transform:uppercase"></div>
+      <div><label class="modal-label">Devise</label>
+        <select class="modal-inp" id="ct-dev"><option value="CAD">CAD</option><option value="USD">USD</option></select></div>
+      <div><label class="modal-label">Opération</label>
+        <select class="modal-inp" id="ct-op"><option value="ACHAT">ACHAT</option><option value="VENTE">VENTE</option></select></div>
+      <div><label class="modal-label">Quantité</label><input class="modal-inp" id="ct-qty" type="number" step="0.0001" min="0"></div>
+      <div><label class="modal-label">Prix unitaire</label><input class="modal-inp" id="ct-prix" type="number" step="0.01" min="0"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-d" onclick="closeCeliTradeModal()">Annuler</button>
+      <button class="btn btn-p" onclick="saveCeliTrade()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AJOUT MOUVEMENT CASH CELI -->
+<div class="modal-bg" id="celi-cash-modal" onclick="if(event.target===this)closeCeliCashModal()">
+  <div class="modal">
+    <div class="modal-title">Mouvement cash CELI</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div><label class="modal-label">Date</label><input class="modal-inp" id="cc-date" type="date"></div>
+      <div><label class="modal-label">Type</label>
+        <select class="modal-inp" id="cc-type">
+          <option value="Dépôt">Dépôt</option>
+          <option value="Retrait">Retrait</option>
+          <option value="Dividende">Dividende</option>
+          <option value="Frais">Frais</option>
+          <option value="Transfert">Transfert</option>
+        </select></div>
+      <div><label class="modal-label">Devise</label>
+        <select class="modal-inp" id="cc-dev"><option value="CAD">CAD</option><option value="USD">USD</option></select></div>
+      <div><label class="modal-label">Montant</label><input class="modal-inp" id="cc-montant" type="number" step="0.01"></div>
+      <div style="grid-column:1/-1"><label class="modal-label">Description</label><input class="modal-inp" id="cc-desc" type="text" placeholder="ex: Dépôt annuel 2026" style="width:100%"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-d" onclick="closeCeliCashModal()">Annuler</button>
+      <button class="btn btn-p" onclick="saveCeliCash()">Enregistrer</button>
+    </div>
+  </div>
 </div>
 
 
@@ -1021,6 +1135,7 @@ function showTab(name, el) {
     renderStocks(); renderActionsTable();
     gsApi({action:'getTradesActions'}).then(function(ta){ if(ta) renderTradesActions(ta); });
   }
+  if(name === 'celi') { loadCeliPanel(); }
   if(name === 'compta') {
     // Les trades options sont déjà en cache (loadAll). Les trades actions ne le
     // sont que si l'onglet Actions a été visité : on les charge au besoin.
@@ -4700,13 +4815,27 @@ function recalcCompte() {
     '</div>';
   };
 
-  // SECTION 1 — Compte total (carte pleine hauteur, à gauche du graphique)
+  // SECTION 1 — Totaux (corpo + CELI combinés, puis corpo seul)
+  // Le total global inclut le CELI — calculé ici et mis à jour par renderCeli aussi
+  var celiTotalCAD_cached = window._celiTotalCAD || 0;
+  var grandTotalCAD = totalCAD + celiTotalCAD_cached;
+  var grandTotalUSD = Math.round(grandTotalCAD / fx2);
+
   var boxEl = document.getElementById('compte-total-box');
   if(boxEl) boxEl.innerHTML =
+    '<div class="kpi" style="flex:1;display:flex;flex-direction:column;justify-content:center;width:100%;border:1px solid var(--qqq);border-radius:4px">'+
+      '<div class="kpi-l" style="color:var(--qqq)">TOTAL COMPTES (CORPO + CELI)</div>'+
+      '<div class="kpi-v g" style="font-size:24px">$'+fi(Math.round(grandTotalCAD))+' CAD</div>'+
+      '<div class="kpi-s">~$'+fi(grandTotalUSD)+' USD · corpo $'+fi(Math.round(totalCAD))+' + CELI $'+fi(Math.round(celiTotalCAD_cached))+'</div>'+
+    '</div>';
+
+  // Tile corpo seul (bloc 2)
+  var corpoBox = document.getElementById('corpo-total-box');
+  if(corpoBox) corpoBox.innerHTML =
     '<div class="kpi" style="flex:1;display:flex;flex-direction:column;justify-content:center;width:100%">'+
-      '<div class="kpi-l">COMPTE TOTAL</div>'+
-      '<div class="kpi-v g" style="font-size:24px">$'+fi(totalCAD)+' CAD</div>'+
-      '<div class="kpi-s">~$'+fi(total)+' USD</div>'+
+      '<div class="kpi-l">TOTAL CORPO</div>'+
+      '<div class="kpi-v g" style="font-size:20px">$'+fi(Math.round(totalCAD))+' CAD</div>'+
+      '<div class="kpi-s">~$'+fi(total)+' USD · corporatif seulement</div>'+
     '</div>';
 
   // Part de chaque classe dans le compte total (CAD), avec mini-barre visuelle.
@@ -4866,34 +4995,45 @@ function renderCeli(fx) {
   });
 
   // Total CELI en CAD
-  var totalCeliCAD_pos = valCeliCAD + valCeliUSD * fx;
+  var totalCeliCAD_pos  = valCeliCAD + valCeliUSD * fx;
   var totalCeliCAD_cash = cashCAD + cashUSD * fx;
-  var totalCeliCAD = totalCeliCAD_pos + totalCeliCAD_cash;
+  var totalCeliCAD      = totalCeliCAD_pos + totalCeliCAD_cash;
+
+  // Exposer pour que recalcCompte puisse additionner corpo + CELI
+  window._celiTotalCAD = totalCeliCAD;
+
+  // Mettre à jour la tile "TOTAL CELI" (bloc 2)
+  var celiTotBox = document.getElementById('celi-total-box');
+  if (celiTotBox) celiTotBox.innerHTML =
+    '<div class="kpi" style="flex:1;display:flex;flex-direction:column;justify-content:center;width:100%">'+
+      '<div class="kpi-l">TOTAL CELI</div>'+
+      '<div class="kpi-v g" style="font-size:20px">$'+fi(Math.round(totalCeliCAD))+' CAD</div>'+
+      '<div class="kpi-s">~$'+fi(Math.round(totalCeliCAD/fx))+' USD · '+compteCAD+' + '+compteUSD+'</div>'+
+    '</div>';
+
+  // Mettre à jour la tile globale (bloc 1) maintenant qu'on a les deux totaux
+  var corpoCAD = window._lastTotalCAD || 0;
+  var grandTotal = corpoCAD + totalCeliCAD;
+  var grandTotalUSD2 = Math.round(grandTotal / fx);
+  var globBox = document.getElementById('compte-total-box');
+  if (globBox) globBox.innerHTML =
+    '<div class="kpi" style="flex:1;display:flex;flex-direction:column;justify-content:center;width:100%;border:1px solid var(--qqq);border-radius:4px">'+
+      '<div class="kpi-l" style="color:var(--qqq)">TOTAL COMPTES (CORPO + CELI)</div>'+
+      '<div class="kpi-v g" style="font-size:24px">$'+fi(Math.round(grandTotal))+' CAD</div>'+
+      '<div class="kpi-s">~$'+fi(grandTotalUSD2)+' USD · corpo $'+fi(Math.round(corpoCAD))+' + CELI $'+fi(Math.round(totalCeliCAD))+'</div>'+
+    '</div>';
 
   var mkC = function(o) {
-    return '<div class="kpi" style="flex:1;min-width:170px;max-width:280px">'+
+    return '<div class="kpi" style="flex:1 1 150px;min-width:140px">'+
       '<div class="kpi-l">'+o.l+'</div>'+
       '<div class="kpi-v'+(o.c?' '+o.c:'')+'">'+o.v+'</div>'+
       '<div class="kpi-s">'+o.s+'</div>'+
     '</div>';
   };
 
-  // ── TILE TOTAUX : compte CAD | compte USD | total CELI ──
+  // celi-totaux conservé caché pour compatibilité
   var totEl = document.getElementById('celi-totaux');
-  if (totEl) {
-    totEl.innerHTML = [
-      {l:'CELI CAD · '+compteCAD,
-       v:'$'+fi(Math.round(valCeliCAD + cashCAD))+' CAD',
-       s:'positions + cash CAD'},
-      {l:'CELI USD · '+compteUSD,
-       v:'$'+fi(Math.round((valCeliUSD + cashUSD)*fx))+' CAD',
-       s:'~$'+fi(Math.round(valCeliUSD + cashUSD))+' USD · converti'},
-      {l:'TOTAL CELI',
-       v:'$'+fi(Math.round(totalCeliCAD))+' CAD',
-       s:'~$'+fi(Math.round(totalCeliCAD/fx))+' USD · positions + cash',
-       c:'g'},
-    ].map(mkC).join('');
-  }
+  if (totEl) totEl.innerHTML = '';
 
   // ── POSITIONS CELI : une tile par position ──
   var posEl = document.getElementById('celi-positions');
@@ -4934,6 +5074,211 @@ function renderCeli(fx) {
       {l:'CASH USD · CELI', v:'$'+fi(Math.round(cashUSD*fx))+' CAD', s:'~$'+fi(Math.round(cashUSD))+' USD · '+compteUSD, c:cashUSD>=0?'':'r'},
     ].map(mkC).join('');
   }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PANEL CELI — trades, cash, positions, modals
+// ═══════════════════════════════════════════════════════════
+
+// Variables globales CELI (trades + mouvements bruts pour l'onglet)
+var celiTradesRaw   = [];  // lignes brutes Trades_Actions_CELI
+var celiMvtsCash    = [];  // lignes brutes Mouvements_Cash_CELI
+
+async function loadCeliPanel() {
+  try {
+    var [tr, mv, pos, cpt] = await Promise.all([
+      gsApi({action:'getTradesActionsCeli'}).catch(()=>[]),
+      gsApi({action:'getMouvementsCashCeli'}).catch(()=>[]),
+      gsApi({action:'getActionsCeli'}).catch(()=>[]),
+      gsApi({action:'getCompteCeli'}).catch(()=>({}))
+    ]);
+    celiTradesRaw = Array.isArray(tr) ? tr : [];
+    celiMvtsCash  = Array.isArray(mv) ? mv : [];
+    if (pos && pos.length) celiPositions = pos;
+    if (cpt && typeof cpt === 'object') celiCompte = cpt;
+    renderCeliPanel();
+  } catch(e) { console.error('loadCeliPanel', e); }
+}
+
+function renderCeliPanel() {
+  var m = calcMarge(); var fx = m.fx || 1.38;
+
+  // ── KPI résumé ──
+  var kpiEl = document.getElementById('celi-panel-kpis');
+  if (kpiEl) {
+    var cashCAD = parseFloat(celiCompte.CashCAD) || 0;
+    var cashUSD = parseFloat(celiCompte.CashUSD) || 0;
+    var valPos = 0;
+    celiPositions.forEach(function(p) {
+      var sym = (p.symbole||'').toUpperCase();
+      var qty = parseFloat(p.quantite)||0;
+      var dev = (p.devise||'CAD').toUpperCase();
+      var prix = parseFloat(mkt&&mkt[sym])||parseFloat(p.coutMoyen)||0;
+      valPos += dev==='CAD' ? qty*prix : qty*prix*fx;
+    });
+    var totalCAD = valPos + cashCAD + cashUSD*fx;
+    kpiEl.innerHTML = [
+      {l:'TOTAL CELI',        v:'$'+fi(Math.round(totalCAD))+' CAD', s:'positions + cash · ~$'+fi(Math.round(totalCAD/fx))+' USD', c:'g'},
+      {l:'CASH CAD · 5DJ1WZ9',v:'$'+fi(Math.round(cashCAD))+' CAD',  s:'natif CAD'},
+      {l:'CASH USD · 5DJ1WT2',v:'$'+fi(Math.round(cashUSD*fx))+' CAD',s:'~$'+fi(Math.round(cashUSD))+' USD'},
+      {l:'POSITIONS',          v:celiPositions.length+' titres',       s:'valeur: $'+fi(Math.round(valPos))+' CAD'},
+    ].map(function(o){
+      return '<div class="kpi" style="flex:1 1 160px;min-width:150px">'+
+        '<div class="kpi-l">'+o.l+'</div>'+
+        '<div class="kpi-v'+(o.c?' '+o.c:'')+'">'+o.v+'</div>'+
+        '<div class="kpi-s">'+o.s+'</div>'+
+      '</div>';
+    }).join('');
+  }
+
+  // ── Tableau trades ──
+  var tb = document.getElementById('celi-trades-body');
+  if (tb) {
+    if (!celiTradesRaw.length) {
+      tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1rem">Aucune transaction — appuyer sur Reconstruire après avoir ajouté des trades</td></tr>';
+    } else {
+      tb.innerHTML = celiTradesRaw.map(function(r,i) {
+        var montant = parseFloat(r.montant||r.Montant)||0;
+        var col = montant < 0 ? 'color:var(--red)' : 'color:var(--green)';
+        return '<tr>'+
+          '<td>'+(r.date||r.Date||'')+'</td>'+
+          '<td style="font-weight:600">'+(r.symbole||r.Symbole||'')+'</td>'+
+          '<td>'+(r.devise||r.Devise||'')+'</td>'+
+          '<td>'+(r.operation||r.Operation||'')+'</td>'+
+          '<td style="text-align:right">'+fi(parseFloat(r.quantite||r.Quantite)||0)+'</td>'+
+          '<td style="text-align:right">$'+(parseFloat(r.prix||r.Prix)||0).toFixed(2)+'</td>'+
+          '<td style="text-align:right;'+col+'">$'+fi(Math.round(Math.abs(montant)))+'</td>'+
+          '<td><button class="btn btn-d" style="padding:2px 8px;font-size:10px" onclick="deleteCeliTrade('+i+')">✕</button></td>'+
+        '</tr>';
+      }).join('');
+    }
+  }
+
+  // ── Tableau mouvements cash ──
+  var mc = document.getElementById('celi-cash-body');
+  if (mc) {
+    if (!celiMvtsCash.length) {
+      mc.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1rem">Aucun mouvement</td></tr>';
+    } else {
+      mc.innerHTML = celiMvtsCash.map(function(r,i) {
+        var m2 = parseFloat(r.montant||r.Montant)||0;
+        var col = m2 < 0 ? 'color:var(--red)' : 'color:var(--green)';
+        return '<tr>'+
+          '<td>'+(r.date||r.Date||'')+'</td>'+
+          '<td>'+(r.type||r.Type||'')+'</td>'+
+          '<td>'+(r.devise||r.Devise||'')+'</td>'+
+          '<td style="text-align:right;'+col+'">$'+fi(Math.round(Math.abs(m2)))+'</td>'+
+          '<td>'+(r.description||r.Description||'')+'</td>'+
+          '<td><button class="btn btn-d" style="padding:2px 8px;font-size:10px" onclick="deleteCeliCash('+i+')">✕</button></td>'+
+        '</tr>';
+      }).join('');
+    }
+  }
+
+  // ── Tableau positions ──
+  var pp = document.getElementById('celi-pos-body');
+  if (pp) {
+    if (!celiPositions.length) {
+      pp.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem">Aucune position — appuyer sur Reconstruire</td></tr>';
+    } else {
+      pp.innerHTML = celiPositions.map(function(p) {
+        var sym  = (p.symbole||'').toUpperCase();
+        var dev  = (p.devise||'CAD').toUpperCase();
+        var qty  = parseFloat(p.quantite)||0;
+        var cout = parseFloat(p.coutMoyen)||0;
+        var prix = parseFloat(mkt&&mkt[sym])||cout;
+        var valNat = qty*prix;
+        var valCAD = dev==='CAD' ? valNat : valNat*(m.fx||1.38);
+        var pnl    = prix>0 ? (prix-cout)*qty : null;
+        var pnlCol = pnl===null?'':pnl>=0?'color:var(--green)':'color:var(--red)';
+        return '<tr>'+
+          '<td style="font-weight:600">'+sym+'</td>'+
+          '<td>'+dev+'</td>'+
+          '<td style="text-align:right">'+fi(qty)+'</td>'+
+          '<td style="text-align:right">$'+cout.toFixed(2)+'</td>'+
+          '<td style="text-align:right">$'+fi(Math.round(qty*cout))+'</td>'+
+          '<td style="text-align:right">$'+fi(Math.round(valCAD))+' CAD</td>'+
+          '<td style="text-align:right;'+pnlCol+'">'+(pnl===null?'—':(pnl>=0?'+':'')+fi(Math.round(pnl))+' '+dev)+'</td>'+
+        '</tr>';
+      }).join('');
+    }
+  }
+}
+
+// Reconstruire CELI depuis Apps Script
+async function reconstruireCeli() {
+  var st = document.getElementById('celi-status');
+  if (st) st.textContent = '⟳ Reconstruction en cours…';
+  try {
+    await gsApi({action:'reconstruire'});
+    await loadCeliPanel();
+    if (st) st.textContent = '✓ Reconstruction terminée · ' + new Date().toLocaleTimeString('fr-CA');
+    recalcCompte(); // rafraîchir la vue Compte aussi
+  } catch(e) {
+    if (st) st.textContent = '✗ Erreur : '+e.message;
+  }
+}
+
+// Modals trades CELI
+function openCeliTradeModal() {
+  var d = new Date(); var dd = d.toISOString().slice(0,10);
+  document.getElementById('ct-date').value = dd;
+  document.getElementById('ct-sym').value  = '';
+  document.getElementById('ct-qty').value  = '';
+  document.getElementById('ct-prix').value = '';
+  document.getElementById('celi-trade-modal').style.display = 'flex';
+}
+function closeCeliTradeModal() { document.getElementById('celi-trade-modal').style.display = 'none'; }
+async function saveCeliTrade() {
+  var pay = {
+    date:      document.getElementById('ct-date').value,
+    symbole:   document.getElementById('ct-sym').value.toUpperCase().trim(),
+    devise:    document.getElementById('ct-dev').value,
+    operation: document.getElementById('ct-op').value,
+    quantite:  parseFloat(document.getElementById('ct-qty').value)||0,
+    prix:      parseFloat(document.getElementById('ct-prix').value)||0,
+  };
+  if (!pay.date || !pay.symbole || !pay.quantite || !pay.prix) { alert('Remplir tous les champs'); return; }
+  pay.montant = pay.operation==='ACHAT' ? -(pay.quantite*pay.prix) : (pay.quantite*pay.prix);
+  closeCeliTradeModal();
+  try {
+    await gsApi({action:'saveTradeActionCeli', data:pay});
+    await reconstruireCeli();
+  } catch(e) { alert('Erreur: '+e.message); }
+}
+async function deleteCeliTrade(idx) {
+  var r = celiTradesRaw[idx]; if (!r) return;
+  if (!confirm('Supprimer ce trade CELI ?')) return;
+  try { await gsApi({action:'deleteTradeActionCeli', data:{date:r.date||r.Date, symbole:r.symbole||r.Symbole}}); await reconstruireCeli(); }
+  catch(e) { alert('Erreur: '+e.message); }
+}
+
+// Modals cash CELI
+function openCeliCashModal() {
+  var d = new Date(); document.getElementById('cc-date').value = d.toISOString().slice(0,10);
+  document.getElementById('cc-montant').value = '';
+  document.getElementById('cc-desc').value    = '';
+  document.getElementById('celi-cash-modal').style.display = 'flex';
+}
+function closeCeliCashModal() { document.getElementById('celi-cash-modal').style.display = 'none'; }
+async function saveCeliCash() {
+  var pay = {
+    date:        document.getElementById('cc-date').value,
+    type:        document.getElementById('cc-type').value,
+    devise:      document.getElementById('cc-dev').value,
+    montant:     parseFloat(document.getElementById('cc-montant').value)||0,
+    description: document.getElementById('cc-desc').value.trim(),
+  };
+  if (!pay.date || !pay.montant) { alert('Date et montant requis'); return; }
+  closeCeliCashModal();
+  try { await gsApi({action:'saveMouvementCashCeli', data:pay}); await reconstruireCeli(); }
+  catch(e) { alert('Erreur: '+e.message); }
+}
+async function deleteCeliCash(idx) {
+  var r = celiMvtsCash[idx]; if (!r) return;
+  if (!confirm('Supprimer ce mouvement cash CELI ?')) return;
+  try { await gsApi({action:'deleteMouvementCashCeli', data:{date:r.date||r.Date, type:r.type||r.Type}}); await reconstruireCeli(); }
+  catch(e) { alert('Erreur: '+e.message); }
 }
 
 // ═══════════════════════════════════════════════════════════
