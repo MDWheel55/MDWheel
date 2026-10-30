@@ -718,10 +718,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--syne);min-height:1
     </table>
   </div>
 
-  <!-- POSITIONS CELI reconstruites — cartes comme onglet Actions -->
-  <div class="sec">POSITIONS CELI (RECONSTRUITES)</div>
-  <div id="celi-pos-cards" style="display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-bottom:1.5rem">
-    <div style="color:var(--muted);font-size:11px;font-family:var(--mono);padding:0.5rem">Actualisez pour charger</div>
+  <!-- POSITIONS CELI — même tableau que l'onglet Actions (sans colonnes d'emprunt : CELI sans marge) -->
+  <div class="sec">PORTEFEUILLE CELI — VALEUR AU MARCHÉ</div>
+  <div class="pwrap" style="margin-bottom:1.5rem">
+    <table class="ptbl">
+      <thead><tr>
+        <th>SYMBOLE</th><th>NOM</th><th>DEV</th><th style="text-align:right">QTÉ</th>
+        <th style="text-align:right">COÛT MOY.</th><th style="text-align:right">PRIX ACT.</th>
+        <th style="text-align:right">VALEUR MKT</th>
+        <th style="text-align:right">P&L $</th><th style="text-align:right">P&L %</th>
+      </tr></thead>
+      <tbody id="celi-pos-body"><tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1rem">Actualisez pour charger</td></tr></tbody>
+      <tfoot id="celi-pos-foot"></tfoot>
+    </table>
   </div>
 
 </div>
@@ -5060,55 +5069,36 @@ function renderCeli(fx) {
   var totEl = document.getElementById('celi-totaux');
   if (totEl) totEl.innerHTML = '';
 
-  // ── POSITIONS CELI : tiles style corpo ──
-  var posEl = document.getElementById('celi-positions');
-  if (posEl) {
-    if (!celiPositions.length) {
-      posEl.innerHTML = '<div style="color:var(--muted);font-size:11px;font-family:var(--mono)">Aucune position — actualisez d\'abord</div>';
-    } else {
-      // Calculer total positions pour les %
-      var totalPosCAD = 0;
-      celiPositions.forEach(function(p) {
-        var sym = (p.symbole||'').toUpperCase(); var qty=parseFloat(p.quantite)||0; var dev=(p.devise||'CAD').toUpperCase();
-        var prix=parseFloat(mkt&&mkt[sym])||parseFloat(p.coutMoyen)||0;
-        totalPosCAD += dev==='CAD' ? qty*prix : qty*prix*fx;
-      });
-      posEl.innerHTML = celiPositions.map(function(p) {
-        var sym = (p.symbole || '').toUpperCase();
-        var qty = parseFloat(p.quantite) || 0;
-        var dev = (p.devise || 'CAD').toUpperCase();
-        var cout = parseFloat(p.coutMoyen) || 0;
-        var prixLive = parseFloat(mkt && mkt[sym]) || 0;
-        var prix = prixLive || cout;
-        var valNat = qty * prix;
-        var valCAD = dev === 'CAD' ? valNat : valNat * fx;
-        var pnl = prixLive > 0 ? (prixLive - cout) * qty : null;
-        var pnlPct = (pnl !== null && cout > 0) ? (pnl/(cout*qty)*100) : null;
-        var pnlCol = pnl===null?'var(--muted)':pnl>=0?'var(--green)':'var(--red)';
-        var pnlStr = pnl===null ? '' : (pnl>=0?'+':'')+fi(Math.round(pnl))+' '+dev+(pnlPct!==null?' ('+(pnlPct>=0?'+':'')+pnlPct.toFixed(1)+'%)':'');
-        var pctPort = totalPosCAD > 0 ? (valCAD/totalPosCAD*100) : 0;
-        return '<div class="kpi" style="flex:1;min-width:140px;max-width:210px">'+
-          '<div class="kpi-l" style="display:flex;justify-content:space-between"><span>'+sym+'</span><span style="color:var(--muted);font-size:8px">'+dev+'</span></div>'+
-          '<div class="kpi-v">$'+fi(Math.round(valCAD))+' CAD</div>'+
-          '<div class="kpi-s">'+fi(qty)+' u · $'+prix.toFixed(2)+'</div>'+
-          (pnl!==null?'<div class="kpi-s" style="color:'+pnlCol+';font-weight:600">P&amp;L '+pnlStr+'</div>':'')+
-          '<div style="margin-top:5px;height:3px;background:var(--s2);border-radius:2px;overflow:hidden">'+
-            '<div style="height:100%;width:'+Math.max(0,Math.min(100,pctPort))+'%;background:'+(pnl===null?'var(--muted)':pnlCol)+';border-radius:2px"></div>'+
-          '</div>'+
-          '<div class="kpi-s" style="margin-top:3px">'+pctPort.toFixed(1)+'%</div>'+
-        '</div>';
-      }).join('');
+  // ── SOMMAIRE CELI : même format que le corpo (Actions CAD / Actions US / Cash CAD / Cash USD) ──
+  // Même fabrique de carte que recalcCompte (min 170 / max 250) pour que les tuiles s'alignent.
+  var mkCardC = function(o){
+    var pnlHtml = '';
+    if(o.pnl != null){
+      var col = o.pnl>=0?'var(--green)':'var(--red)';
+      pnlHtml = '<div class="kpi-s" style="color:'+col+';font-weight:600">P&amp;L '+(o.pnl>=0?'+':'')+fi(Math.round(o.pnl))+'$ '+(o.pnlDev||'CAD')+'</div>';
     }
-  }
+    return '<div class="kpi" style="flex:1;min-width:170px;max-width:250px">'+
+      '<div class="kpi-l">'+o.l+'</div>'+
+      '<div class="kpi-v'+(o.c?' '+o.c:'')+'">'+o.v+'</div>'+
+      '<div class="kpi-s">'+o.s+'</div>'+ pnlHtml +
+    '</div>';
+  };
+  var C = celiCalc(fx);
+  var posEl = document.getElementById('celi-positions');
+  if (posEl) posEl.innerHTML = [
+    {l:'ACTIONS CAD', v:'$'+fi(Math.round(C.cad.val))+' CAD',
+     s:(C.cad.syms.join(' · ')||'aucune')+' · ~$'+fi(Math.round(C.cad.val/fx))+' USD',
+     pnl:C.cad.syms.length?C.cad.pnl:null, pnlDev:'CAD'},
+    {l:'ACTIONS US',  v:'$'+fi(Math.round(C.usd.val*fx))+' CAD',
+     s:(C.usd.syms.join(' · ')||'aucune')+' · ~$'+fi(Math.round(C.usd.val))+' USD',
+     pnl:C.usd.syms.length?C.usd.pnl:null, pnlDev:'USD'},
+  ].map(mkCardC).join('');
 
-  // ── CASH CELI ──
   var cashEl = document.getElementById('celi-cash');
-  if (cashEl) {
-    cashEl.innerHTML = [
-      {l:'CASH CAD · CELI', v:'$'+fi(Math.round(cashCAD))+' CAD', s:'natif CAD · '+compteCAD, c:cashCAD>=0?'':'r'},
-      {l:'CASH USD · CELI', v:'$'+fi(Math.round(cashUSD*fx))+' CAD', s:'~$'+fi(Math.round(cashUSD))+' USD · '+compteUSD, c:cashUSD>=0?'':'r'},
-    ].map(mkC).join('');
-  }
+  if (cashEl) cashEl.innerHTML = [
+    {l:'CASH CAD', v:'$'+fi(Math.round(cashCAD))+' CAD',    s:'natif CAD · '+compteCAD,                                c:cashCAD>=0?'':'r'},
+    {l:'CASH USD', v:'$'+fi(Math.round(cashUSD*fx))+' CAD', s:'~$'+fi(Math.round(cashUSD))+' USD · natif USD · '+compteUSD, c:cashUSD>=0?'':'r'},
+  ].map(mkCardC).join('');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -5210,53 +5200,87 @@ function renderCeliPanel() {
     }
   }
 
-  // ── Cartes positions CELI (style onglet Actions) ──
-  var pp = document.getElementById('celi-pos-cards');
+  // ── Tableau positions CELI (même présentation que l'onglet Actions) ──
+  var pp = document.getElementById('celi-pos-body');
+  var pf = document.getElementById('celi-pos-foot');
   if (pp) {
-    if (!celiPositions.length) {
-      pp.innerHTML = '<div style="color:var(--muted);font-size:11px;font-family:var(--mono);padding:0.5rem">Aucune position — appuyer sur Reconstruire</div>';
+    var C = celiCalc(fx);
+    if (!C.rows.length) {
+      pp.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1rem">Aucune position — appuyer sur Reconstruire</td></tr>';
+      if (pf) pf.innerHTML = '';
     } else {
-      var totalValCAD = 0;
-      celiPositions.forEach(function(p) {
-        var sym = (p.symbole||'').toUpperCase();
-        var qty = parseFloat(p.quantite)||0;
-        var dev = (p.devise||'CAD').toUpperCase();
-        var cout = parseFloat(p.coutMoyen)||0;
-        var prix = parseFloat(mkt&&mkt[sym])||cout;
-        var valNat = qty*prix;
-        var valCAD = dev==='CAD' ? valNat : valNat*(m.fx||1.38);
-        totalValCAD += valCAD;
-      });
-      var cardsHtml = celiPositions.map(function(p) {
-        var sym  = (p.symbole||'').toUpperCase();
-        var dev  = (p.devise||'CAD').toUpperCase();
-        var qty  = parseFloat(p.quantite)||0;
-        var cout = parseFloat(p.coutMoyen)||0;
-        var prix = parseFloat(mkt&&mkt[sym])||cout;
-        var prixLive = parseFloat(mkt&&mkt[sym])||0;
-        var valNat = qty*prix;
-        var valCAD = dev==='CAD' ? valNat : valNat*(m.fx||1.38);
-        var coutTotal = qty*cout;
-        var pnl    = prixLive > 0 ? (prixLive-cout)*qty : null;
-        var pnlPct = (pnl !== null && coutTotal > 0) ? (pnl/coutTotal*100) : null;
-        var pnlCol = pnl===null?'var(--muted)':pnl>=0?'var(--green)':'var(--red)';
-        var pnlStr = pnl===null ? '—' : (pnl>=0?'+':'')+fi(Math.round(pnl))+' '+dev+(pnlPct!==null?' ('+(pnlPct>=0?'+':'')+pnlPct.toFixed(1)+'%)':'');
-        var pctPort = totalValCAD > 0 ? (valCAD/totalValCAD*100) : 0;
-        var barColor = pnl===null?'var(--muted)':pnl>=0?'var(--green)':'var(--red)';
-        return '<div class="kpi" style="flex:1;min-width:160px;max-width:230px">'+
-          '<div class="kpi-l" style="display:flex;justify-content:space-between"><span>'+sym+'</span><span style="color:var(--muted)">'+dev+'</span></div>'+
-          '<div class="kpi-v">$'+fi(Math.round(valCAD))+' CAD</div>'+
-          '<div class="kpi-s">'+fi(qty)+' u · $'+prix.toFixed(2)+' · coût $'+cout.toFixed(2)+'</div>'+
-          '<div class="kpi-s" style="color:'+pnlCol+';font-weight:600">P&amp;L '+pnlStr+'</div>'+
-          '<div style="margin-top:6px;height:3px;background:var(--s2);border-radius:2px;overflow:hidden">'+
-            '<div style="height:100%;width:'+Math.max(0,Math.min(100,pctPort))+'%;background:'+barColor+';border-radius:2px"></div>'+
-          '</div>'+
-          '<div class="kpi-s" style="margin-top:3px">'+pctPort.toFixed(1)+'% du CELI</div>'+
-        '</div>';
-      }).join('');
-      pp.innerHTML = cardsHtml;
+      var mkRow = function(a) {
+        var pnlCol  = a.pnl>=0?'var(--green)':'var(--red)';
+        var colDev  = a.dev==='CAD'?'var(--blue)':'var(--amber)';
+        var bgDev   = a.dev==='CAD'?'rgba(77,159,255,0.15)':'rgba(255,184,48,0.15)';
+        var pxCol   = !a.live?'var(--muted)':a.prix>a.cout?'var(--green)':a.prix<a.cout?'var(--red)':'var(--muted)';
+        return '<tr>'+
+          '<td style="font-weight:600;color:var(--qqq);font-family:var(--mono)">'+a.sym+'</td>'+
+          '<td style="color:var(--muted);font-size:10px">'+a.nom+'</td>'+
+          '<td><span style="font-size:9px;padding:1px 5px;border-radius:2px;background:'+bgDev+';color:'+colDev+'">'+a.dev+'</span></td>'+
+          '<td style="text-align:right;font-family:var(--mono)">'+Math.round(a.qty).toLocaleString('fr-CA')+'</td>'+
+          '<td style="text-align:right;font-family:var(--mono);color:var(--muted)">$'+a.cout.toFixed(2)+'</td>'+
+          '<td style="text-align:right;font-family:var(--mono);color:'+pxCol+'">$'+a.prix.toFixed(2)+'</td>'+
+          '<td style="text-align:right;font-family:var(--mono);font-weight:600">$'+fi(Math.round(a.val))+' '+a.dev+'</td>'+
+          '<td style="text-align:right;font-family:var(--mono);color:'+pnlCol+'">'+(a.pnl>=0?'+':'')+fi(Math.round(a.pnl))+'$</td>'+
+          '<td style="text-align:right;font-family:var(--mono);color:'+pnlCol+'">'+(a.pnlPct>=0?'+':'')+a.pnlPct.toFixed(2)+'%</td>'+
+        '</tr>';
+      };
+      var secRow = function(lbl,col){ return '<tr><td colspan="9" style="padding:6px 8px;font-family:var(--mono);font-size:8px;color:'+col+';letter-spacing:0.1em;background:var(--s2);border-top:2px solid var(--border)">'+lbl+'</td></tr>'; };
+      var totRow = function(lbl, t, dev, col){
+        var pct  = t.cout>0 ? (t.pnl/t.cout*100) : 0;
+        var pCol = t.pnl>=0?'var(--green)':'var(--red)';
+        return '<tr style="background:var(--s2)">'+
+          '<td colspan="6" style="padding:7px 8px;font-family:var(--mono);font-size:10px;color:'+col+';font-weight:700;letter-spacing:0.05em">'+lbl+'</td>'+
+          '<td style="text-align:right;font-family:var(--mono);font-weight:700">$'+fi(Math.round(t.val))+' '+dev+'</td>'+
+          '<td style="text-align:right;font-family:var(--mono);font-weight:700;color:'+pCol+'">'+(t.pnl>=0?'+':'')+fi(Math.round(t.pnl))+'$</td>'+
+          '<td style="text-align:right;font-family:var(--mono);font-weight:700;color:'+pCol+'">'+(pct>=0?'+':'')+pct.toFixed(2)+'%</td>'+
+        '</tr>';
+      };
+      var rCAD = C.rows.filter(function(a){return a.dev==='CAD';});
+      var rUSD = C.rows.filter(function(a){return a.dev!=='CAD';});
+      pp.innerHTML =
+        (rCAD.length ? secRow('ACTIONS CAD','var(--blue)')+rCAD.map(mkRow).join('')+totRow('TOTAL CAD', C.cad, 'CAD', 'var(--blue)') : '')+
+        (rUSD.length ? secRow('ACTIONS USD','var(--amber)')+rUSD.map(mkRow).join('')+totRow('TOTAL USD', C.usd, 'USD', 'var(--amber)') : '');
+      var totUSD = C.cad.val/fx + C.usd.val;
+      var pnlUSD = C.cad.pnl/fx + C.usd.pnl;
+      if (pf) pf.innerHTML =
+        '<tr style="border-top:2px solid var(--border)">'+
+        '<td colspan="6" style="padding:8px;font-family:var(--mono);font-size:10px;color:var(--muted);font-weight:600">TOTAL USD ÉQUIV.</td>'+
+        '<td style="padding:8px;text-align:right;font-weight:700;color:var(--green);font-family:var(--mono)">$'+fi(Math.round(totUSD))+' USD</td>'+
+        '<td style="padding:8px;text-align:right;font-weight:700;font-family:var(--mono);color:'+(pnlUSD>=0?'var(--green)':'var(--red)')+'">$'+fi(Math.round(pnlUSD))+' USD</td>'+
+        '<td></td></tr>';
     }
   }
+}
+
+// ── Calcul commun CELI : lignes par titre + sous-totaux par devise (natifs) ──
+// Utilisé par l'onglet CELI (tableau) et l'onglet Compte (sommaire).
+function celiCalc(fx) {
+  var rows = [];
+  var cad = {val:0, cout:0, pnl:0, syms:[]};
+  var usd = {val:0, cout:0, pnl:0, syms:[]};
+  celiPositions.forEach(function(p) {
+    var sym  = (p.symbole||'').toUpperCase();
+    var qty  = parseFloat(p.quantite)||0;
+    if (!sym || !qty) return;
+    var dev  = (p.devise||'CAD').toUpperCase()==='USD' ? 'USD' : 'CAD';
+    var cout = parseFloat(p.coutMoyen)||0;
+    var live = parseFloat(mkt && mkt[sym])||0;
+    var prix = live || cout;
+    var val  = qty*prix, coutTot = qty*cout, pnl = val - coutTot;
+    var NOMS = {XEC:'ISHARES CORE MSCI EM IMI ETF', XEF:'ISHARES CORE MSCI EAFE IMI ETF',
+                XIU:'ISHARES S&P/TSX 60 ETF', VEQT:'VANGUARD ALL-EQ ETF PTFL',
+                IBIT:'ISHARES BITCOIN TRUST ETF', SPY:'SPDR S&P 500 ETF TRUST',
+                NVDA:'NVIDIA CORP', TSLA:'TESLA INC'};
+    var nom = (p.nom && p.nom.toUpperCase()!==sym) ? p.nom : (NOMS[sym]||sym);
+    rows.push({sym:sym, nom:nom, dev:dev, qty:qty, cout:cout, prix:prix, live:live>0,
+               val:val, pnl:pnl, pnlPct: coutTot>0 ? pnl/coutTot*100 : 0});
+    var s = dev==='CAD' ? cad : usd;
+    s.val += val; s.cout += coutTot; s.pnl += pnl; s.syms.push(sym);
+  });
+  rows.sort(function(a,b){ return a.sym<b.sym?-1:a.sym>b.sym?1:0; });
+  return {rows:rows, cad:cad, usd:usd};
 }
 
 // Reconstruire CELI depuis Apps Script
