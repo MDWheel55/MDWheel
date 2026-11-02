@@ -1830,7 +1830,18 @@ async function actualiserTout() {
 
   // ── Snapshot performance quotidien ──
   if(steps.marche && window._lastTotalCAD) {
-    maybeSnapshot(window._lastTotalUSD, window._lastTotalCAD, window._lastMargePct, window._lastFX);
+    await maybeSnapshot(window._lastTotalUSD, window._lastTotalCAD, window._lastMargePct, window._lastFX);
+  }
+  // ── Historique CELI : remplir une fois les anciens snapshots sans valeur CELI ──
+  // (clôtures Yahoo × positions CELI actuelles, côté serveur). Ne s'exécute plus
+  // une fois que tous les snapshots ont leur colonne CeliCAD.
+  if (perfSnapshots.some(s => s.celiCAD == null)) {
+    try {
+      setStatus('Historique CELI...');
+      const r = await gsApi({action:'backfillCeli'});
+      if (r && r.filled > 0) await loadPerfSnapshots();
+      else if (r && r.error) console.warn('backfillCeli:', r.error);
+    } catch(e) { console.warn('backfillCeli:', e); }
   }
 
   // ── Statut final ──
@@ -4636,16 +4647,20 @@ async function maybeSnapshot(valeurUSD, valeurCAD, margePct, fx) {
     valeurUSD: Math.round(valeurUSD),
     valeurCAD: Math.round(valeurCAD),
     margePct:  Math.round(margePct*10)/10,
-    fx:        Math.round(fx*10000)/10000
+    fx:        Math.round(fx*10000)/10000,
+    // Valeur CELI du jour (colonne F de Snapshots). null = inconnue, le serveur garde l'existante.
+    celiCAD:   window._celiTotalCAD > 0 ? Math.round(window._celiTotalCAD) : null
   };
 
   if (existingIdx >= 0) {
-    // Snapshot du jour existe déjà — on le réécrit seulement si l'écart absolu dépasse le seuil.
-    // (Ancienne règle : écart relatif > 1%, soit ~5 400$ sur un compte de 540k — trop grossier
-    //  pour capter les mouvements intra-journaliers réels.)
+    // Snapshot du jour existe déjà — on le réécrit seulement si l'écart absolu dépasse le seuil
+    // (corpo OU CELI), ou si la valeur CELI du jour manque encore.
     const old   = perfSnapshots[existingIdx];
     const ecart = Math.abs(snap.valeurCAD - old.valeurCAD);
-    if (ecart <= SNAPSHOT_SEUIL_CAD) { renderPerfChart(); return; } // bruit, on ne réécrit pas
+    const celiManquant = snap.celiCAD != null && old.celiCAD == null;
+    const ecartCeli = (snap.celiCAD != null && old.celiCAD != null) ? Math.abs(snap.celiCAD - old.celiCAD) : 0;
+    if (snap.celiCAD == null && old.celiCAD != null) snap.celiCAD = old.celiCAD;
+    if (ecart <= SNAPSHOT_SEUIL_CAD && ecartCeli <= SNAPSHOT_SEUIL_CAD && !celiManquant) { renderPerfChart(); return; } // bruit
     perfSnapshots[existingIdx] = snap; // remplacer
   } else {
     perfSnapshots.push(snap);
@@ -4688,24 +4703,25 @@ function renderPerfChart() {
   const cutDate = cuts[perfView] || cuts.mois;
   const rawData = perfSnapshots.filter(s => s.date >= cutDate);
 
-  // Choisir la série selon perfSerie
-  // Les snapshots n'ont que valeurCAD (corpo). Pour total et celi on estime avec _celiTotalCAD courant.
-  // Quand le snapshot a un champ celiCAD on l'utilise, sinon on approxime avec la valeur courante.
-  const celiNow = window._celiTotalCAD || 0;
-  const data = rawData.map(s => {
-    // Si le snapshot inclut les deux champs séparés (à venir), on les utilise.
-    // Sinon fallback : corpo=valeurCAD, celi=celiNow (constant sur la période)
-    const corpoCAD = s.valeurCAD || 0;
-    const celiCAD  = s.celiCAD != null ? s.celiCAD : celiNow;
-    const totalCAD = corpoCAD + celiCAD;
-    let v;
-    if (perfSerie === 'celi')  v = celiCAD;
-    else if (perfSerie === 'corpo') v = corpoCAD;
-    else v = totalCAD;
-    return { date: s.date, valeurCAD: v };
-  });
+  // Choisir la série selon perfSerie.
+  // valeurCAD = corpo ; celiCAD = colonne F de Snapshots (null si jamais enregistrée).
+  // Total et CELI n'utilisent QUE les jours où la valeur CELI est connue — jamais
+  // de valeur CELI inventée (sinon courbe plate et Total faussé).
+  const data = rawData
+    .filter(s => perfSerie === 'corpo' || s.celiCAD != null)
+    .map(s => {
+      const corpoCAD = s.valeurCAD || 0;
+      const celiCAD  = s.celiCAD || 0;
+      const v = perfSerie === 'celi' ? celiCAD : perfSerie === 'corpo' ? corpoCAD : corpoCAD + celiCAD;
+      return { date: s.date, valeurCAD: v };
+    });
 
   if (data.length < 2) {
+    if (noData) {
+      noData.textContent = (perfSerie !== 'corpo')
+        ? 'Historique CELI pas encore disponible — cliquer « Actualiser tout » pour le remplir'
+        : 'Données insuffisantes — le graphique se remplira automatiquement lors des actualisations quotidiennes';
+    }
     if (noData) noData.style.display = 'flex';
     canvas.style.display = 'none';
     if (statsEl) statsEl.innerHTML = '';
